@@ -1,0 +1,40 @@
+{
+    "bonus_rules": [
+        {
+            "min": 0,
+            "max": 35,
+            "value": 0.0
+        },
+        {
+            "min": 35,
+            "max": 37.5,
+            "value": 0.0125
+        },
+        {
+            "min": 37.5,
+            "max": 40,
+            "value": 0.0125
+        },
+        {
+            "min": 40,
+            "max": 45,
+            "value": 0.0125
+        },
+        {
+            "min": 45,
+            "max": 47.5,
+            "value": 0.0175
+        },
+        {
+            "min": 47.5,
+            "max": 50,
+            "value": 0.02
+        },
+        {
+            "min": 50,
+            "max": 100,
+            "value": 0.0225
+        }
+    ],
+    "last_directory": "C:/Users/Usuario"
+}
