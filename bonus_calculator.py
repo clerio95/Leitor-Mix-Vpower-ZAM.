@@ -8,6 +8,7 @@ import locale
 import sys
 import ctypes
 from PIL import Image, ImageTk
+from tkinter import Button as TkButton
 
 # Hide terminal window on Windows
 if sys.platform == 'win32':
@@ -159,30 +160,47 @@ def parse_relatorio(file_path):
 class BonusCalculator:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("Calculadora de Bonificação - Mix de Vendas")
+        self.window.title("Mix V-Power")
         self.window.geometry("800x600")
-        
-        # Configure dark theme
-        self.window.configure(bg='black')
+        # Definir ícone do programa
+        try:
+            self.window.iconbitmap("icons/iconV.ico")
+        except Exception as e:
+            print(f"Erro ao definir ícone: {e}")
+        # Configurar cores Shell V-Power
+        self.shell_red = '#ED1C24'
+        self.shell_yellow = '#FFD500'
+        self.shell_white = '#FFFFFF'
+        self.shell_bg = self.shell_white
+        self.shell_fg = self.shell_red
+        self.window.configure(bg=self.shell_bg)
         
         # Configure styles
         self.style = ttk.Style()
         self.style.theme_use('clam')  # Use clam theme as base
         
-        # Configure dark theme colors
-        self.style.configure("TFrame", background="black")
-        self.style.configure("TLabel", background="black", foreground="lime", font=('Roboto', 14))
-        self.style.configure("Title.TLabel", background="black", foreground="lime", font=('Roboto', 24, 'bold'))
-        self.style.configure("Result.TLabel", background="black", foreground="lime", font=('Roboto', 16))
-        self.style.configure("Mix.TLabel", background="black", foreground="lime", font=('Roboto', 20, 'bold'))
+        # Estilos com base nas cores Shell
+        self.style.configure("TFrame", background=self.shell_bg)
+        self.style.configure("TLabel", background=self.shell_bg, foreground=self.shell_fg, font=('Roboto', 14))
+        self.style.configure("Title.TLabel", background=self.shell_bg, foreground=self.shell_red, font=('Roboto', 36, 'bold'))
+        self.style.configure("Result.TLabel", background=self.shell_bg, foreground=self.shell_fg, font=('Roboto', 16))
+        self.style.configure("Mix.TLabel", background=self.shell_bg, foreground=self.shell_red, font=('Roboto', 20, 'bold'))
         self.style.configure("TButton", 
-                           background="#333333", 
-                           foreground="lime",
+                           background=self.shell_red, 
+                           foreground=self.shell_white,
                            font=('Roboto', 14),
-                           padding=10)
-        self.style.map("TButton",
-                      background=[('active', '#444444')],
-                      foreground=[('active', 'white')])
+                           padding=10,
+                           borderwidth=0,
+                           relief="flat")
+        self.style.configure("Cog.TButton",
+                           background="#FFFFFF",  # Branco
+                           foreground="black",
+                           borderwidth=0,
+                           relief="flat")
+        self.style.configure("Update.TButton", background=self.shell_red, foreground=self.shell_white, font=('Roboto', 14, 'bold'), padding=10, relief="flat")
+        self.style.map("Update.TButton", background=[('active', self.shell_yellow)], foreground=[('active', self.shell_red)])
+        # Estilo para botão refresh só ícone, sem fundo/borda
+        self.style.configure("Icon.TButton", background=self.shell_bg, foreground=self.shell_fg, font=('Roboto', 28, 'bold'), borderwidth=0, relief="flat", padding=0)
         
         self.employee_code = tk.StringVar()  # Substitui username por employee_code
         self.employees = []
@@ -238,110 +256,87 @@ class BonusCalculator:
         for widget in self.window.winfo_children():
             widget.destroy()
         
-        # Create main container with padding
+        # Não usar marca d'água, logo será exibida abaixo do botão Entrar
         main_frame = ttk.Frame(self.window, padding="30")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configure grid weights
         self.window.grid_rowconfigure(0, weight=1)
         self.window.grid_columnconfigure(0, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
-        
-        # Create a frame for the login form with padding
         login_frame = ttk.Frame(main_frame, padding="20")
         login_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         login_frame.grid_columnconfigure(0, weight=1)
-        
-        # Add title
-        ttk.Label(login_frame, text="Calculadora de Bonificação", style="Title.TLabel").grid(row=0, column=0, pady=(0, 40))
-        
-        # Add employee code field
+        ttk.Label(login_frame, text="Mix V-Power", style="Title.TLabel").grid(row=0, column=0, pady=(0, 40))
         ttk.Label(login_frame, text="Código do Funcionário:", style="TLabel").grid(row=1, column=0, pady=10)
-        code_entry = ttk.Entry(login_frame, textvariable=self.employee_code, width=30, font=('Roboto', 14))
+        code_entry = ttk.Entry(login_frame, textvariable=self.employee_code, width=30, font=('Roboto', 20))
         code_entry.grid(row=2, column=0, pady=(0, 30))
-        
-        # Add login button
-        ttk.Button(login_frame, text="Entrar", command=self.login, style="TButton").grid(row=3, column=0, pady=20)
-        
-        # Add cog icon button at bottom-right
+        # Frame para botões lado a lado
+        button_frame = ttk.Frame(login_frame)
+        button_frame.grid(row=3, column=0, pady=20)
+        ttk.Button(button_frame, text="Entrar", command=self.login, style="TButton").pack(side=tk.LEFT, padx=(0, 10), anchor="center")
+        TkButton(button_frame, text="🔄", command=self.reload_report, font=("Roboto", 28, "bold"), bd=0, relief="flat", bg=self.shell_bg, activebackground=self.shell_bg, fg=self.shell_fg, activeforeground=self.shell_fg, highlightthickness=0, padx=0, pady=0).pack(side=tk.LEFT, anchor="center")
+        # Exibir logo V-Power centralizada abaixo do botão Entrar
         try:
-            # Load and resize the cog icon
+            logo_img = Image.open("Logo_Vpower.png").convert("RGBA")
+            max_width, max_height = 500, 200
+            orig_width, orig_height = logo_img.size
+            ratio = min(max_width / orig_width, max_height / orig_height, 1.0)
+            new_width = int(orig_width * ratio)
+            new_height = int(orig_height * ratio)
+            logo_img = logo_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            self.logo_photo = ImageTk.PhotoImage(logo_img)
+            logo_label = ttk.Label(login_frame, image=self.logo_photo, background=self.shell_bg)
+            logo_label.grid(row=4, column=0, pady=(30, 0))
+        except Exception as e:
+            print(f"Erro ao carregar logo V-Power: {e}")
+        
+        # Botão de configuração (cog) com fundo branco
+        try:
             cog_image = Image.open("icons/cog.ico")
             cog_image = cog_image.resize((20, 20), Image.Resampling.LANCZOS)
-            
-            # Create a new image with lime background
-            background = Image.new('RGBA', (20, 20), (50, 205, 50, 255))  # Lime green color
-            
-            # Calculate center position for the cog icon
+            background = Image.new('RGBA', (20, 20), (255, 255, 255, 255))  # Fundo branco
             bg_width, bg_height = background.size
             cog_width, cog_height = cog_image.size
             x = (bg_width - cog_width) // 2
             y = (bg_height - cog_height) // 2
-            
-            # Paste the cog icon centered on the background
             background.paste(cog_image, (x, y), cog_image if cog_image.mode == 'RGBA' else None)
-            
             cog_photo = ImageTk.PhotoImage(background)
-            
-            # Create a custom style for the cog button
             self.style.configure(
                 "Cog.TButton",
-                background="#32CD32",  # Lime green
+                background="#FFFFFF",  # Branco
                 foreground="black",
                 borderwidth=0,
                 relief="flat"
             )
-            self.style.map(
-                "Cog.TButton",
-                background=[('active', '#37E837')],  # 15% lighter lime on hover
-                foreground=[('active', 'black')]
-            )
-            
-            # Create the cog button with absolute positioning
             cog_button = ttk.Button(
-                self.window,  # Parent is window instead of frame
+                self.window,
                 image=cog_photo,
                 command=self.select_report_file,
                 style="Cog.TButton",
                 width=1
             )
-            cog_button.image = cog_photo  # Keep a reference to prevent garbage collection
-            
-            # Position the button absolutely
+            cog_button.image = cog_photo
             def position_cog_button():
-                # Get window dimensions
                 window_width = self.window.winfo_width()
                 window_height = self.window.winfo_height()
-                
-                # Calculate position (20px from right and bottom edges)
                 x = window_width - 30
                 y = window_height - 30
-                
-                # Place the button
                 cog_button.place(x=x, y=y)
-            
-            # Position initially and bind to window resize
             position_cog_button()
             self.window.bind('<Configure>', lambda e: position_cog_button())
-            
         except Exception as e:
             print(f"Error loading cog icon: {e}")
-            # Fallback to text button if icon loading fails
             fallback_button = ttk.Button(
-                self.window,  # Parent is window instead of frame
+                self.window,
                 text="⚙",
                 command=self.select_report_file,
                 style="Cog.TButton"
             )
-            
-            # Position the fallback button absolutely
             def position_fallback_button():
                 window_width = self.window.winfo_width()
                 window_height = self.window.winfo_height()
                 x = window_width - 30
                 y = window_height - 30
                 fallback_button.place(x=x, y=y)
-            
             position_fallback_button()
             self.window.bind('<Configure>', lambda e: position_fallback_button())
     
@@ -360,41 +355,39 @@ class BonusCalculator:
     def create_result_widgets(self):
         for widget in self.window.winfo_children():
             widget.destroy()
-        
-        # Create main container with padding
+        # Frame principal
         main_frame = ttk.Frame(self.window, padding="30")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configure grid weights
+        main_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
         self.window.grid_rowconfigure(0, weight=1)
         self.window.grid_columnconfigure(0, weight=1)
+        main_frame.grid_rowconfigure(0, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
-        
-        # Create a frame for the results with padding
+        # Frame dos resultados (ocupa o topo e cresce)
         result_frame = ttk.Frame(main_frame, padding="20")
-        result_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Add scrollbar
+        result_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+        # Scrollbar
         scrollbar = ttk.Scrollbar(result_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Configure text widget with dark theme
         self.result_text = tk.Text(
             result_frame,
             height=20,
             width=70,
             font=('Roboto', 12),
+            spacing3=10,
             yscrollcommand=scrollbar.set,
             wrap=tk.WORD,
-            bg='black',
-            fg='lime',
-            insertbackground='lime'  # Cursor color
+            bg=self.shell_bg,
+            fg=self.shell_fg,
+            insertbackground=self.shell_fg
         )
         self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.result_text.yview)
-        
-        # Add exit button
-        ttk.Button(main_frame, text="Sair", command=self.logout).grid(row=1, column=0, pady=20)
+        # Frame fixo para o botão sair
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=1, column=0, sticky=(tk.E, tk.W))
+        ttk.Button(button_frame, text="Sair", command=self.logout, style="TButton").pack(pady=20)
     
     def load_report(self):
         """Load the report file and process employee data."""
@@ -478,12 +471,15 @@ class BonusCalculator:
         return 0.0
     
     def show_employee_results(self, employee_name):
+        def format_brl(value, decimals=3):
+            # Formata número para padrão brasileiro: milhar com ponto, decimal com vírgula
+            return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        def format_brl_money(value):
+            return f'{value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         self.result_text.delete(1.0, tk.END)
         
-        # Get employee data
         employee_data = self.employee_data[employee_name]
         
-        # Calculate mix percentage
         total_quantity = employee_data['total_quantity']
         if total_quantity > 0:
             gasolina_vpower = employee_data['gasolina_vpower']
@@ -493,29 +489,26 @@ class BonusCalculator:
         else:
             mix_percentage = 0
         
-        # Get bonus per liter based on mix percentage
-        bonus_per_liter = min(self.get_bonus_value(mix_percentage), 0.0225)  # Apply ceiling
-        
-        # Calculate total bonus (only for premium fuels)
+        bonus_per_liter = min(self.get_bonus_value(mix_percentage), 0.0225)
         total_bonus = premium_quantity * bonus_per_liter
         
-        # Configure tags for different text styles
-        self.result_text.tag_configure("title", font=('Roboto', 16, 'bold'), foreground="lime")
-        self.result_text.tag_configure("normal", font=('Roboto', 12), foreground="lime")
-        self.result_text.tag_configure("mix", font=('Roboto', 18, 'bold'), foreground="lime")
-        self.result_text.tag_configure("bonus", font=('Roboto', 14, 'bold'), foreground="lime")
+        # Estilos de texto Shell e destaque para valor em verde
+        self.result_text.tag_configure("title", font=('Roboto', 16, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("normal", font=('Roboto', 12), foreground=self.shell_fg)
+        self.result_text.tag_configure("mix", font=('Roboto', 18, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("bonus_label", font=('Roboto', 14, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("bonus_value", font=('Roboto', 14, 'bold'), foreground="#228B22")
         
-        # Insert content with appropriate tags
         self.result_text.insert(tk.END, f"Funcionário: {employee_name}\n\n", "title")
-        self.result_text.insert(tk.END, f"Gasolina Comum: {employee_data['gasolina_comum']:.3f} litros\n", "normal")
-        self.result_text.insert(tk.END, f"Gasolina Aditivada V-Power: {employee_data['gasolina_vpower']:.3f} litros\n", "normal")
-        self.result_text.insert(tk.END, f"Etanol Aditivado Shell V-Power: {employee_data['etanol_vpower']:.3f} litros\n", "normal")
-        self.result_text.insert(tk.END, f"Total: {total_quantity:.3f} litros\n\n", "normal")
-        self.result_text.insert(tk.END, f"Mix de Vendas: {mix_percentage:.2f}%\n\n", "mix")
-        self.result_text.insert(tk.END, f"Bonificação por litro: R$ {bonus_per_liter:.4f}\n", "normal")
-        self.result_text.insert(tk.END, f"Valor estimado da bonificação: R$ {total_bonus:.2f}\n", "bonus")
+        self.result_text.insert(tk.END, f"Gasolina Comum: {format_brl(employee_data['gasolina_comum'])} litros\n", "normal")
+        self.result_text.insert(tk.END, f"Gasolina Aditivada V-Power: {format_brl(employee_data['gasolina_vpower'])} litros\n", "normal")
+        self.result_text.insert(tk.END, f"Etanol Aditivado Shell V-Power: {format_brl(employee_data['etanol_vpower'])} litros\n", "normal")
+        self.result_text.insert(tk.END, f"Total: {format_brl(total_quantity)} litros\n\n", "normal")
+        self.result_text.insert(tk.END, f"Mix de Vendas: {format_brl(mix_percentage, 2)}%\n\n", "mix")
+        self.result_text.insert(tk.END, f"Bonificação por litro: R$ {format_brl_money(bonus_per_liter)}\n", "normal")
+        self.result_text.insert(tk.END, "Valor estimado da bonificação: ", "bonus_label")
+        self.result_text.insert(tk.END, f"R$ {format_brl_money(total_bonus)}\n", "bonus_value")
         
-        # Make text read-only
         self.result_text.config(state=tk.DISABLED)
     
     def logout(self):
@@ -524,6 +517,10 @@ class BonusCalculator:
         
         self.create_login_widgets()
         self.employee_code.set("")
+    
+    def reload_report(self):
+        """Recarrega o relatório selecionado na configuração atual."""
+        self.load_report()
     
     def run(self):
         self.window.mainloop()

@@ -7,8 +7,9 @@ echo Building application...
 python -m PyInstaller --noconfirm --onefile --windowed ^
     --add-data "config.json;." ^
     --add-data "icons;icons" ^
-    --icon "icons/cog.ico" ^
-    --name "Calculadora de Bonificação" ^
+    --add-data "Logo_Vpower.png;." ^
+    --icon "icons/iconV.ico" ^
+    --name "Mix V-Power" ^
     bonus_calculator.py
 
 echo Build complete!
