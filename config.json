@@ -36,5 +36,43 @@
             "value": 0.0225
         }
     ],
-    "last_directory": "C:/Users/Usuario"
+    "last_directory": "C:/Users/Usuario",
+    "employee_settings": {
+        "498": {
+            "team": "A_NIGHT"
+        },
+        "777": {
+            "team": "INACTIVE"
+        },
+        "404": {
+            "team": "INACTIVE"
+        },
+        "223": {
+            "team": "A"
+        },
+        "773": {
+            "team": "INACTIVE"
+        },
+        "122": {
+            "team": "B"
+        },
+        "651": {
+            "team": "B"
+        },
+        "381": {
+            "team": "OIL"
+        },
+        "769": {
+            "team": "B_NIGHT"
+        },
+        "673": {
+            "team": "B"
+        },
+        "776": {
+            "team": "A"
+        },
+        "675": {
+            "team": "A"
+        }
+    }
 }

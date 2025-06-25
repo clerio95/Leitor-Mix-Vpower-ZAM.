@@ -1,16 +1,12 @@
 @echo off
-echo Cleaning previous build...
-rmdir /s /q build
-rmdir /s /q dist
+REM Instala dependências
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 
-echo Building application...
-python -m PyInstaller --noconfirm --onefile --windowed ^
-    --add-data "config.json;." ^
-    --add-data "icons;icons" ^
-    --add-data "Logo_Vpower.png;." ^
-    --icon "icons/iconV.ico" ^
-    --name "Mix V-Power" ^
-    bonus_calculator.py
+REM Gera o executável atualizado
+python -m PyInstaller --noconfirm --onefile --windowed --icon=icons/iconV.ico --name "Mix V-Power" bonus_calculator.py
 
-echo Build complete!
-pause 
+REM Mensagem final
+ECHO.
+ECHO Executável gerado em dist\Mix V-Power.exe
+PAUSE 

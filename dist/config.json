@@ -1,0 +1,76 @@
+{
+    "bonus_rules": [
+        {
+            "min": 0,
+            "max": 35,
+            "value": 0.0
+        },
+        {
+            "min": 35,
+            "max": 40,
+            "value": 0.01
+        },
+        {
+            "min": 40,
+            "max": 45,
+            "value": 0.02
+        },
+        {
+            "min": 45,
+            "max": 50,
+            "value": 0.03
+        },
+        {
+            "min": 50,
+            "max": 55,
+            "value": 0.04
+        },
+        {
+            "min": 55,
+            "max": 60,
+            "value": 0.05
+        },
+        {
+            "min": 60,
+            "max": 65,
+            "value": 0.06
+        },
+        {
+            "min": 65,
+            "max": 70,
+            "value": 0.07
+        },
+        {
+            "min": 70,
+            "max": 75,
+            "value": 0.08
+        },
+        {
+            "min": 75,
+            "max": 80,
+            "value": 0.09
+        },
+        {
+            "min": 80,
+            "max": 85,
+            "value": 0.1
+        },
+        {
+            "min": 85,
+            "max": 90,
+            "value": 0.11
+        },
+        {
+            "min": 90,
+            "max": 95,
+            "value": 0.12
+        },
+        {
+            "min": 95,
+            "max": 100,
+            "value": 0.13
+        }
+    ],
+    "last_directory": "C:\\Fullstack Dev Projetos\\Projetos Posto\\Leitura e Convers\u00e3o relatorio mix\\dist",
+    "employee_settings": {}
+}

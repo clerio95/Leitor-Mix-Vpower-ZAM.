@@ -5,7 +5,7 @@ a = Analysis(
     ['bonus_calculator.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.json', '.'), ('icons', 'icons'), ('Logo_Vpower.png', '.')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

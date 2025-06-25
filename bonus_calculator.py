@@ -9,6 +9,7 @@ import sys
 import ctypes
 from PIL import Image, ImageTk
 from tkinter import Button as TkButton
+from tkinter import simpledialog
 
 # Hide terminal window on Windows
 if sys.platform == 'win32':
@@ -247,7 +248,8 @@ class BonusCalculator:
     def save_config(self):
         config = {
             "bonus_rules": self.config["bonus_rules"],
-            "last_directory": self.last_directory
+            "last_directory": self.last_directory,
+            "employee_settings": self.config.get("employee_settings", {})
         }
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=4)
@@ -341,16 +343,140 @@ class BonusCalculator:
             self.window.bind('<Configure>', lambda e: position_fallback_button())
     
     def select_report_file(self):
-        file_path = filedialog.askopenfilename(
-            initialdir=self.last_directory,
-            title="Selecione o arquivo de relatório",
-            filetypes=(("Arquivos de texto", "*.txt"), ("Todos os arquivos", "*.*"))
-        )
-        if file_path:
-            self.last_directory = os.path.dirname(file_path)
+        # Prompt de senha antes de abrir a configuração
+        password = simpledialog.askstring("Senha de administrador", "Digite a senha para acessar as configurações:", show='*', parent=self.window)
+        if password != "Zam1234@":
+            messagebox.showerror("Erro", "Senha incorreta!")
+            return
+        # Nova janela de opções administrativas
+        admin_win = tk.Toplevel(self.window)
+        admin_win.title("Opções de Administração")
+        admin_win.geometry("350x220")
+        admin_win.grab_set()
+        def open_settings():
+            admin_win.destroy()
+            self.show_employee_settings_window()
+        def open_file():
+            admin_win.destroy()
+            file_path = filedialog.askopenfilename(
+                initialdir=self.last_directory,
+                title="Selecione o arquivo de relatório",
+                filetypes=(("Arquivos de texto", "*.txt"), ("Todos os arquivos", "*.*"))
+            )
+            if file_path:
+                self.last_directory = os.path.dirname(file_path)
+                self.save_config()
+                self.report_file = file_path
+                self.load_report()
+        def generate_mix_report():
+            # Gera relatório de mix de todos os funcionários e dos times
+            if not hasattr(self, 'employee_data') or not self.employee_data:
+                messagebox.showerror("Erro", "Nenhum relatório carregado.")
+                return
+            # Ignorar OIL e INACTIVE
+            valid_emps = [emp for emp in self.employee_data.values() if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') not in ("OIL", "INACTIVE")]
+            teams = {'A': [], 'B': []}
+            for emp in valid_emps:
+                team = self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team', 'A')
+                if team.startswith('A'):
+                    teams['A'].append(emp)
+                elif team.startswith('B'):
+                    teams['B'].append(emp)
+            def calc_team_mix(team_emps):
+                total_premium = sum(e['gasolina_vpower'] + e['etanol_vpower'] for e in team_emps)
+                total = sum(e['total_quantity'] for e in team_emps)
+                return (total_premium / total * 100) if total > 0 else 0.0
+            mix_A = calc_team_mix(teams['A'])
+            mix_B = calc_team_mix(teams['B'])
+            # Gerar texto do relatório
+            lines = []
+            lines.append("Relatório de Mix de Funcionários e Times\n")
+            lines.append(f"Mix do Time A: {mix_A:.2f}%\n")
+            lines.append(f"Mix do Time B: {mix_B:.2f}%\n\n")
+            lines.append("Funcionários:\n")
+            for emp in valid_emps:
+                emp_id = emp['id']
+                emp_name = emp['name']
+                total = emp['total_quantity']
+                premium = emp['gasolina_vpower'] + emp['etanol_vpower']
+                mix = (premium / total * 100) if total > 0 else 0.0
+                team = self.config.get('employee_settings', {}).get(emp_id, {"team": "A"}).get('team', 'A')
+                lines.append(f"{emp_id} - {emp_name} | Time: {team} | Mix: {mix:.2f}% | Total: {total:.2f} L\n")
+            # Salvar arquivo
+            save_path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Arquivo de texto", "*.txt")],
+                title="Salvar relatório de mix"
+            )
+            if save_path:
+                with open(save_path, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                messagebox.showinfo("Relatório gerado", f"Relatório salvo em:\n{save_path}")
+        ttk.Button(admin_win, text="Configurar Funcionários/Times", command=open_settings, style="TButton").pack(pady=10, fill=tk.X, padx=30)
+        ttk.Button(admin_win, text="Alterar arquivo de relatório", command=open_file, style="TButton").pack(pady=10, fill=tk.X, padx=30)
+        ttk.Button(admin_win, text="Gerar relatório de mix", command=generate_mix_report, style="TButton").pack(pady=10, fill=tk.X, padx=30)
+
+    def show_employee_settings_window(self):
+        # Carregar lista de funcionários do relatório atual
+        if not hasattr(self, 'employee_data') or not self.employee_data:
+            messagebox.showerror("Erro", "Nenhum relatório carregado. Carregue um relatório antes de configurar funcionários.")
+            return
+        # Janela de configuração
+        settings_win = tk.Toplevel(self.window)
+        settings_win.title("Configuração de Funcionários e Times")
+        settings_win.geometry("600x500")
+        settings_win.grab_set()
+        # Times disponíveis
+        teams = [
+            ("A", "Time A"),
+            ("B", "Time B"),
+            ("A_NIGHT", "Noturno Time A"),
+            ("B_NIGHT", "Noturno Time B"),
+            ("OIL", "Troca de Óleo (sem bonificação)"),
+            ("INACTIVE", "Funcionário Desativado")
+        ]
+        # Carregar configurações existentes
+        employee_settings = self.config.get("employee_settings", {})
+        # Frame de rolagem
+        canvas = tk.Canvas(settings_win)
+        frame = ttk.Frame(canvas)
+        scrollbar = ttk.Scrollbar(settings_win, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas.create_window((0, 0), window=frame, anchor='nw')
+        def on_configure(event):
+            canvas.configure(scrollregion=canvas.bbox('all'))
+        frame.bind('<Configure>', on_configure)
+        # Widgets para cada funcionário
+        row = 0
+        emp_vars = {}
+        for emp_name, emp_data in self.employee_data.items():
+            emp_id = emp_data['id']
+            label = ttk.Label(frame, text=f"{emp_id} - {emp_data['name']}", style="TLabel")
+            label.grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+            var = tk.StringVar()
+            var.set(employee_settings.get(emp_id, {}).get('team', 'A'))
+            emp_vars[emp_id] = var
+            option = ttk.Combobox(frame, textvariable=var, values=[t[1] for t in teams], state="readonly", width=30)
+            option.grid(row=row, column=1, padx=5, pady=5)
+            row += 1
+        # Botão salvar
+        def save_settings():
+            new_settings = {}
+            for emp_id, var in emp_vars.items():
+                team_label = var.get()
+                # Mapear label para valor
+                for tval, tlabel in teams:
+                    if tlabel == team_label:
+                        new_settings[emp_id] = {"team": tval}
+                        break
+            self.config["employee_settings"] = new_settings
             self.save_config()
-            self.report_file = file_path
-            self.load_report()
+            messagebox.showinfo("Salvo", "Configurações salvas com sucesso!")
+            settings_win.destroy()
+        save_btn = ttk.Button(settings_win, text="Salvar", command=save_settings, style="TButton")
+        save_btn.pack(pady=10)
     
     def create_result_widgets(self):
         for widget in self.window.winfo_children():
@@ -374,8 +500,8 @@ class BonusCalculator:
             result_frame,
             height=20,
             width=70,
-            font=('Roboto', 12),
-            spacing3=10,
+            font=('Roboto', 11),
+            spacing3=3,
             yscrollcommand=scrollbar.set,
             wrap=tk.WORD,
             bg=self.shell_bg,
@@ -471,15 +597,58 @@ class BonusCalculator:
         return 0.0
     
     def show_employee_results(self, employee_name):
-        def format_brl(value, decimals=3):
-            # Formata número para padrão brasileiro: milhar com ponto, decimal com vírgula
-            return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        def format_brl_money(value):
-            return f'{value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        self.result_text.delete(1.0, tk.END)
-        
+        print(f"Exibindo resultados para: {employee_name}")
         employee_data = self.employee_data[employee_name]
-        
+        print(f"Dados carregados: {employee_data}")
+        def format_brl(value, decimals=3):
+            return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        def format_centavos(value):
+            return f'{value:.2f} Centavos'
+        def format_brl_money(value):
+            return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        self.result_text.delete(1.0, tk.END)
+
+        emp_id = employee_data['id']
+        emp_settings = self.config.get('employee_settings', {}).get(emp_id, {"team": "A"})
+        emp_team = emp_settings.get('team', 'A')
+
+        # Se funcionário for OIL ou INACTIVE, mostrar mensagem especial e não mostrar mix/bonificação
+        if emp_team in ("OIL", "INACTIVE"):
+            self.result_text.tag_configure("title", font=('Roboto', 16, 'bold'), foreground=self.shell_red)
+            self.result_text.tag_configure("normal", font=('Roboto', 12), foreground=self.shell_fg)
+            self.result_text.insert(tk.END, f"Funcionário: {employee_name}\n\n", "title")
+            self.result_text.insert(tk.END, f"Time: {emp_team.replace('OIL', 'Troca de Óleo').replace('INACTIVE', 'Desativado')}\n", "normal")
+            self.result_text.insert(tk.END, "Este funcionário não participa do cálculo de bonificação.\n", "normal")
+            self.result_text.config(state=tk.DISABLED)
+            return
+
+        # Carregar todos os funcionários válidos (excluindo OIL)
+        valid_emps = [emp for emp in self.employee_data.values() if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') != 'OIL']
+        # Agrupar por time
+        teams = {'A': [], 'B': []}
+        for emp in valid_emps:
+            team = self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team', 'A')
+            if team.startswith('A'):
+                teams['A'].append(emp)
+            elif team.startswith('B'):
+                teams['B'].append(emp)
+        # Calcular mix de cada time
+        def calc_team_mix(team_emps):
+            total_premium = sum(e['gasolina_vpower'] + e['etanol_vpower'] for e in team_emps)
+            total = sum(e['total_quantity'] for e in team_emps)
+            return (total_premium / total * 100) if total > 0 else 0.0
+        mix_A = calc_team_mix(teams['A'])
+        mix_B = calc_team_mix(teams['B'])
+        # Determinar vencedora
+        if mix_A > mix_B:
+            winner = 'A'
+            loser = 'B'
+        elif mix_B > mix_A:
+            winner = 'B'
+            loser = 'A'
+        else:
+            winner = loser = None  # Empate
+        # Calcular mix do funcionário
         total_quantity = employee_data['total_quantity']
         if total_quantity > 0:
             gasolina_vpower = employee_data['gasolina_vpower']
@@ -488,27 +657,156 @@ class BonusCalculator:
             mix_percentage = (premium_quantity / total_quantity) * 100
         else:
             mix_percentage = 0
-        
-        bonus_per_liter = min(self.get_bonus_value(mix_percentage), 0.0225)
+            premium_quantity = 0
+        # Determinar valor por litro (em centavos)
+        team_mix = mix_A if emp_team.startswith('A') else mix_B
+        if team_mix > mix_A and emp_team.startswith('A'):
+            team_mix = mix_A
+        if team_mix > mix_B and emp_team.startswith('B'):
+            team_mix = mix_B
+        # Regras de bonificação
+        def get_bonus_cents(team_mix, is_winner):
+            if 35 < team_mix < 37.5:
+                return 0.0
+            elif 37.5 <= team_mix < 40:
+                return 1.25 if is_winner else 0.75
+            elif 40 <= team_mix < 45:
+                return 1.50 if is_winner else 1.00
+            elif 45 <= team_mix < 47.5:
+                return 1.75 if is_winner else 1.50
+            elif 47.5 <= team_mix < 50:
+                return 2.00 if is_winner else 1.75
+            elif team_mix >= 50:
+                return 2.25 if is_winner else 2.00
+            else:
+                return 0.0
+        # Determinar se funcionário é noturno
+        is_night = emp_team in ("A_NIGHT", "B_NIGHT")
+        # Determinar se é vencedor
+        is_winner = (winner is not None and emp_team.startswith(winner))
+        is_loser = (loser is not None and emp_team.startswith(loser))
+        # Calcular bonificação
+        if is_winner:
+            bonus_per_liter = get_bonus_cents(team_mix, True)
+        elif is_loser:
+            bonus_per_liter = get_bonus_cents(team_mix, False)
+        else:
+            bonus_per_liter = 0.0
+        # Aplicar 70% se noturno
+        if is_night:
+            bonus_per_liter *= 0.7
         total_bonus = premium_quantity * bonus_per_liter
-        
-        # Estilos de texto Shell e destaque para valor em verde
-        self.result_text.tag_configure("title", font=('Roboto', 16, 'bold'), foreground=self.shell_red)
-        self.result_text.tag_configure("normal", font=('Roboto', 12), foreground=self.shell_fg)
-        self.result_text.tag_configure("mix", font=('Roboto', 18, 'bold'), foreground=self.shell_red)
-        self.result_text.tag_configure("bonus_label", font=('Roboto', 14, 'bold'), foreground=self.shell_red)
-        self.result_text.tag_configure("bonus_value", font=('Roboto', 14, 'bold'), foreground="#228B22")
-        
+        # Calcular média de litragem do time (base_team)
+        base_team = 'A' if emp_team.startswith('A') else 'B'
+        # Filtrar funcionários diurnos do mesmo time
+        diurnos = [emp for emp in valid_emps if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') == base_team]
+        # Calcular bonificação individual de cada diurno
+        diurno_bonuses = []
+        for emp in diurnos:
+            total_quantity = emp['total_quantity']
+            premium_quantity = emp['gasolina_vpower'] + emp['etanol_vpower'] if total_quantity > 0 else 0
+            # Recalcular mix do time (já feito acima)
+            # Recalcular se é vencedor
+            is_winner = (winner is not None and base_team == winner)
+            is_loser = (loser is not None and base_team == loser)
+            if is_winner:
+                bonus_per_liter = get_bonus_cents(team_mix, True)
+            elif is_loser:
+                bonus_per_liter = get_bonus_cents(team_mix, False)
+            else:
+                bonus_per_liter = 0.0
+            diurno_bonuses.append(premium_quantity * bonus_per_liter)
+        # Calcular média
+        if diurno_bonuses:
+            avg_bonus = sum(diurno_bonuses) / len(diurno_bonuses)
+        else:
+            avg_bonus = 0.0
+        # Para noturno, aplicar 0.7
+        if is_night:
+            avg_bonus *= 0.7
+        # Exibir total de litros do funcionário (garantir que é o correto)
+        total_litros_funcionario = employee_data['total_quantity']
+        # Exibir média de litros do grupo (ativos, exceto OIL/INACTIVE)
+        if diurnos:
+            avg_team_liters_display = sum(emp['total_quantity'] for emp in diurnos) / len(diurnos)
+        else:
+            avg_team_liters_display = 0.0
+        # Exibir na tela
+        self.result_text.tag_configure("title", font=('Roboto', 13, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("normal", font=('Roboto', 11), foreground=self.shell_fg)
+        self.result_text.tag_configure("mix", font=('Roboto', 15, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("bonus_label", font=('Roboto', 12, 'bold'), foreground=self.shell_red)
+        self.result_text.tag_configure("bonus_value", font=('Roboto', 12, 'bold'), foreground="#228B22")
         self.result_text.insert(tk.END, f"Funcionário: {employee_name}\n\n", "title")
+        self.result_text.insert(tk.END, f"Time: {emp_team.replace('_NIGHT', ' (Noturno)').replace('OIL', 'Troca de Óleo')}\n", "normal")
         self.result_text.insert(tk.END, f"Gasolina Comum: {format_brl(employee_data['gasolina_comum'])} litros\n", "normal")
         self.result_text.insert(tk.END, f"Gasolina Aditivada V-Power: {format_brl(employee_data['gasolina_vpower'])} litros\n", "normal")
         self.result_text.insert(tk.END, f"Etanol Aditivado Shell V-Power: {format_brl(employee_data['etanol_vpower'])} litros\n", "normal")
-        self.result_text.insert(tk.END, f"Total: {format_brl(total_quantity)} litros\n\n", "normal")
-        self.result_text.insert(tk.END, f"Mix de Vendas: {format_brl(mix_percentage, 2)}%\n\n", "mix")
-        self.result_text.insert(tk.END, f"Bonificação por litro: R$ {format_brl_money(bonus_per_liter)}\n", "normal")
-        self.result_text.insert(tk.END, "Valor estimado da bonificação: ", "bonus_label")
-        self.result_text.insert(tk.END, f"R$ {format_brl_money(total_bonus)}\n", "bonus_value")
-        
+        self.result_text.insert(tk.END, f"Média de litragem do time: {format_brl(avg_team_liters_display)} litros\n", "normal")
+        self.result_text.insert(tk.END, f"Total de litros do funcionário: {format_brl(total_litros_funcionario)} litros\n\n", "normal")
+        self.result_text.insert(tk.END, f"Mix de Vendas do Funcionário: {format_brl(mix_percentage, 2)}%\n", "mix")
+        self.result_text.insert(tk.END, f"Mix do Time: {format_brl(team_mix, 2)}%\n\n", "mix")
+        self.result_text.insert(tk.END, f"Bonificação por litro: {format_centavos(bonus_per_liter)}\n", "bonus_label")
+        # --- Regra especial: bonificação individual se mix 8% abaixo/acima do time ---
+        base_team = 'A' if emp_team.startswith('A') else 'B'
+        other_team_members = [emp for emp in teams[base_team] if emp['id'] != emp_id]
+        if other_team_members:
+            total_premium_others = sum(emp['gasolina_vpower'] + emp['etanol_vpower'] for emp in other_team_members)
+            total_litros_others = sum(emp['total_quantity'] for emp in other_team_members)
+            mix_others = (total_premium_others / total_litros_others * 100) if total_litros_others > 0 else 0.0
+        else:
+            mix_others = 0.0
+        aplica_bonificacao_individual = False
+        if mix_percentage < mix_others - 8 or mix_percentage > mix_others + 8:
+            aplica_bonificacao_individual = True
+        # Calcular bonificação individual se necessário
+        bonus_individual = 0.0
+        if aplica_bonificacao_individual:
+            def get_bonus_cents_individual(mix):
+                if 35 < mix < 37.5:
+                    return 0.0
+                elif 37.5 <= mix < 40:
+                    return 0.75
+                elif 40 <= mix < 45:
+                    return 1.00
+                elif 45 <= mix < 47.5:
+                    return 1.50
+                elif 47.5 <= mix < 50:
+                    return 1.75
+                elif mix >= 50:
+                    return 2.00
+                else:
+                    return 0.0
+            bonus_cents_individual = get_bonus_cents_individual(mix_percentage)
+            bonus_individual = premium_quantity * bonus_cents_individual
+            if emp_team in ("A_NIGHT", "B_NIGHT"):
+                bonus_individual *= 0.7
+        # Calcular bonificação estimada por empenho (apenas para diurnos do grupo)
+        empenho_bonus = 0.0
+        is_diurno = emp_team in ("A", "B")
+        if is_diurno:
+            diurnos_grupo = [emp for emp in teams[emp_team] if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') == base_team]
+            if diurnos_grupo and len(diurnos_grupo) > 1:
+                other_diurnos = [emp for emp in diurnos_grupo if emp['id'] != emp_id]
+                if other_diurnos:
+                    avg_team_liters = sum(emp['total_quantity'] for emp in other_diurnos) / len(other_diurnos)
+                    if total_litros_funcionario > avg_team_liters and avg_team_liters > 0:
+                        diff_percent = (total_litros_funcionario - avg_team_liters) / avg_team_liters
+                        # Bonificação estimada por empenho: percentual * bonificação principal
+                        if aplica_bonificacao_individual:
+                            empenho_bonus = diff_percent * bonus_individual
+                        else:
+                            empenho_bonus = diff_percent * avg_bonus
+        # Exibir bonificação principal para todos (diurnos e noturnos)
+        if aplica_bonificacao_individual and bonus_individual > 0:
+            self.result_text.insert(tk.END, "Bonificação individual por diferença de mix: ", "bonus_label")
+            self.result_text.insert(tk.END, f"{format_brl_money(bonus_individual/100)}\n", "bonus_value")
+        elif not aplica_bonificacao_individual and avg_bonus > 0:
+            self.result_text.insert(tk.END, "Valor estimado da bonificação: ", "bonus_label")
+            self.result_text.insert(tk.END, f"{format_brl_money(avg_bonus/100)}\n", "bonus_value")
+        if is_diurno and empenho_bonus > 0:
+            self.result_text.insert(tk.END, "Bonificação estimada por empenho: ", "bonus_label")
+            self.result_text.insert(tk.END, f"{format_brl_money(empenho_bonus/100)}\n", "bonus_value")
         self.result_text.config(state=tk.DISABLED)
     
     def logout(self):
