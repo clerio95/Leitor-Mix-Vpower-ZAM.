@@ -13,36 +13,18 @@ Esta aplicação processa relatórios de vendas de combustíveis e calcula bonif
 
 ## Requisitos
 
-- Python 3.6 ou superior
-- Tkinter (geralmente já incluído com Python)
-- Arquivo "relatorio.txt" na mesma pasta do executável
+- Windows 10 ou 11.
 
 ## Instalação
 
-1. Clone ou baixe este repositório
-2. Instale as dependências:
-   ```
-   pip install -r requirements.txt
-   ```
-3. Coloque o arquivo "relatorio.txt" na mesma pasta do executável
+1. Extrair Zip Mix-Vpower da pasta Dist. Abrir executável.
 
 ## Como Usar
 
 1. Execute o programa:
-   ```
-   python bonus_calculator.py
-   ```
+2. Selecione o relatorio.txt que foi gerado pelo AutoSystem
 
-2. Na tela de login:
-   - Digite seu primeiro nome (sem distinção de maiúsculas/minúsculas)
-   - Digite sua senha (padrão inicial: 123)
-   - Clique em "Entrar"
-
-3. Após o login, você verá:
-   - Seu nome
-   - Seu percentual de mix de vendas
-   - Sua bonificação por litro
-   - O valor total da sua bonificação
+3. Faça o teste com o código que algum funcionário que está no relatório
 
 4. Para sair, clique no botão "Sair"
 
@@ -66,9 +48,7 @@ As regras de bonificação podem ser ajustadas no arquivo `config.json`. O arqui
 
 ## Segurança
 
-- A senha padrão inicial é "123"
-- Recomenda-se alterar a senha após o primeiro acesso
-- Os dados são protegidos por autenticação individual
+- A senha padrão inicial é "Zam1234@"
 
 ## Suporte
 
