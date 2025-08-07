@@ -183,4 +183,4 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 
 [![Shell V-Power](https://img.shields.io/badge/Shell-V--Power-red.svg)](https://shell.com.br)
 
-</div> 
+</div>
