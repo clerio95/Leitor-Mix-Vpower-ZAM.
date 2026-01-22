@@ -14,6 +14,11 @@ REM Instala dependências
 ECHO Instalando dependências...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+if errorlevel 1 (
+    ECHO Erro ao instalar dependências.
+    PAUSE
+    exit /b 1
+)
 ECHO.
 
 REM Gera o executável
