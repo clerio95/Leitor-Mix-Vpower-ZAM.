@@ -3,7 +3,6 @@ from tkinter import ttk, filedialog, messagebox
 import json
 import os
 import re
-from decimal import Decimal, InvalidOperation
 import locale
 import sys
 import ctypes
@@ -49,191 +48,323 @@ try:
 except locale.Error:
     print("Warning: pt_BR.UTF-8 locale not available, using fallback number parsing.")
 
-def parse_brazilian_number(value_str):
-    if not value_str:
-        return None
-    try:
-        # Remove any whitespace and replace comma with dot
-        value_str = value_str.strip().replace('.', '').replace(',', '.')
-        return float(value_str)
-    except (ValueError, InvalidOperation):
-        return None
-
-def test_product_matching():
-    """Test function to verify product name matching logic"""
-    test_products = [
-        "DIESEL B S-10 ADITIVADO",
-        "ETANOL HIDRATADO COMUM ADITIVADO", 
-        "GASOLINA C COMUM ADITIVADA",
-        "GASOLINA C COMUM",
-        "DIESEL S-10 EVOLUX",  # Old name
-        "ETANOL ADITIVADO SHELL V-POWER",  # Old name
-        "GASOLINA ADITIVADA V-POWER",  # Old name
-        "GASOLINA COMUM"  # Old name
-    ]
+def converter_numero_brasileiro(valor: str) -> float:
+    """
+    Converte número no formato brasileiro (1.234,567) para float.
     
-    print("Testing product name matching:")
-    for product in test_products:
-        product_upper = product.upper()
-        if ('ETANOL' in product_upper and 'ADITIVADO' in product_upper):
-            print(f"✓ {product} -> etanol_vpower")
-        elif ('GASOLINA' in product_upper and 'ADITIVADA' in product_upper):
-            print(f"✓ {product} -> gasolina_vpower")
-        elif ('GASOLINA' in product_upper and 'COMUM' in product_upper and 'ADITIVADA' not in product_upper):
-            print(f"✓ {product} -> gasolina_comum")
-        elif 'DIESEL' in product_upper:
-            print(f"- {product} -> ignored (diesel)")
-        else:
-            print(f"✗ {product} -> UNMATCHED!")
-    print()
-
-def parse_relatorio(file_path):
-    print(f"Loading report: {file_path}")
+    Args:
+        valor: String com número no formato brasileiro
+        
+    Returns:
+        float: Número convertido
+    """
+    if not valor or not valor.strip():
+        return 0.0
     
-    # Tentar abrir com UTF-8, fallback para latin1
+    # Remove espaços e converte vírgula para ponto
+    valor = valor.strip().replace('.', '').replace(',', '.')
+    
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            lines = [line.rstrip('\r\n') for line in file.readlines()]
-    except UnicodeDecodeError:
-        print("UTF-8 encoding failed, trying latin1...")
-        with open(file_path, 'r', encoding='latin1') as file:
-            lines = [line.rstrip('\r\n') for line in file.readlines()]
+        return float(valor)
+    except ValueError:
+        return 0.0
 
-    report_data = {
-        'header': {},
-        'employees': [],
-        'totals': {}
-    }
 
-    current_employee = None
+def extrair_cabecalho(linhas):
+    """
+    Extrai informações do cabeçalho do relatório.
+    Identifica linhas por palavras-chave semânticas.
+    
+    Args:
+        linhas: Lista de linhas do arquivo
+        
+    Returns:
+        dict: Dicionário com informações do cabeçalho
+    """
+    header = {}
+    
+    for linha in linhas:
+        linha = linha.strip()
+        
+        # Ignora linhas vazias ou de separação
+        if not linha or linha.startswith('+') or linha.startswith('-'):
+            continue
+        
+        # Extrai Empresa
+        match = re.search(r'Empresa:\s*(.+?)\s*\|\s*$', linha, re.IGNORECASE)
+        if match:
+            header['empresa'] = match.group(1).strip()
+        
+        # Extrai Período
+        match = re.search(r'Período:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['periodo'] = match.group(1).strip()
+        
+        # Extrai Modo
+        match = re.search(r'Modo:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['modo'] = match.group(1).strip()
+        
+        # Extrai Agrupar
+        match = re.search(r'Agrupar:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['agrupar'] = match.group(1).strip()
+        
+        # Extrai Ordenar
+        match = re.search(r'Ordenar:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['ordenar'] = match.group(1).strip()
+        
+        # Extrai Produtividade
+        match = re.search(r'Produtividade:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['produtividade'] = match.group(1).strip()
+        
+        # Extrai Grupo empresa
+        match = re.search(r'Grupo empresa:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['grupo_empresa'] = match.group(1).strip()
+        
+        # Extrai Grupo produto
+        match = re.search(r'Grupo produto:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['grupo_produto'] = match.group(1).strip()
+        
+        # Extrai Exibir
+        match = re.search(r'Exibir:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['exibir'] = match.group(1).strip()
+        
+        # Para quando encontrar a primeira linha de tabela (início dos funcionários)
+        if 'Funcionário:' in linha and 'Vendas:' in linha:
+            break
+    
+    return header
+
+
+def parsear_linha_item(linha):
+    """
+    Parseia uma linha de item da tabela de produtos.
+    
+    Args:
+        linha: Linha do arquivo contendo dados do item
+        
+    Returns:
+        dict ou None: Dicionário com dados do item ou None se não for uma linha válida
+    """
+    # Ignora linhas de separação ou cabeçalho
+    if not linha.strip() or linha.strip().startswith('+') or 'Código' in linha or 'Produto' in linha:
+        return None
+    
+    # Verifica se é uma linha de item (começa e termina com |)
+    if not linha.strip().startswith('|') or not linha.strip().endswith('|'):
+        return None
+    
+    # Verifica se é linha de total do vendedor
+    if 'Total do vendedor' in linha:
+        return None
+    
+    # Divide pelos separadores |
+    campos = [campo.strip() for campo in linha.split('|')]
+    
+    # Remove primeiro e último elemento (vazios devido ao | inicial e final)
+    campos = campos[1:-1]
+    
+    # Deve ter exatamente 7 campos
+    if len(campos) != 7:
+        return None
+    
+    try:
+        item = {
+            'codigo': int(campos[0]) if campos[0] else 0,
+            'produto': campos[1],
+            'fornecedor': campos[2],
+            'quantidade': converter_numero_brasileiro(campos[3]),
+            'unidade': campos[4],
+            'valor': converter_numero_brasileiro(campos[5]),
+            'percentual': converter_numero_brasileiro(campos[6])
+        }
+        return item
+    except (ValueError, IndexError):
+        return None
+
+
+def parsear_total_funcionario(linha):
+    """
+    Extrai informações do total do funcionário.
+    
+    Args:
+        linha: Linha contendo o total do vendedor
+        
+    Returns:
+        dict ou None: Dicionário com totais ou None se não for uma linha válida
+    """
+    if 'Total do vendedor e participação geral nas vendas' not in linha:
+        return None
+    
+    # Divide pelos separadores |
+    campos = [campo.strip() for campo in linha.split('|')]
+    
+    # Remove primeiro e último elemento
+    campos = campos[1:-1]
+    
+    # A linha de total tem a estrutura: texto | | quantidade | | valor | percentual
+    # Então temos: [texto, '', quantidade, '', valor, percentual]
+    if len(campos) < 6:
+        return None
+    
+    try:
+        # Campos estão nas posições: 2 (quantidade), 4 (valor), 5 (percentual)
+        total = {
+            'quantidade': converter_numero_brasileiro(campos[2]),
+            'valor': converter_numero_brasileiro(campos[4]),
+            'percentual': converter_numero_brasileiro(campos[5])
+        }
+        return total
+    except (ValueError, IndexError):
+        return None
+
+
+def extrair_funcionarios(linhas):
+    """
+    Extrai todos os blocos de funcionários e seus itens vendidos.
+    
+    Args:
+        linhas: Lista de linhas do arquivo
+        
+    Returns:
+        list: Lista de dicionários com dados dos funcionários
+    """
+    funcionarios = []
+    funcionario_atual = None
+    itens_atual = []
+    
     i = 0
-    while i < len(lines):
-        line = lines[i].strip()
+    while i < len(linhas):
+        linha = linhas[i]
         
-        # Identificar linha de funcionário
-        employee_match = re.match(r'\|\s*Funcionário:\s*(\d+)\s*-\s*([^|]+?)\s+Vendas:\s*(\d+)\s*\|', line)
-        if employee_match:
-            if current_employee:
-                # Finalizar o funcionário anterior
-                report_data['employees'].append(current_employee)
+        # Detecta início de novo funcionário
+        match = re.search(r'Funcionário:\s*(\d+)\s*-\s*(.+?)\s+Vendas:\s*(\d+)', linha)
+        if match:
+            # Salva funcionário anterior se existir
+            if funcionario_atual:
+                funcionario_atual['itens'] = itens_atual
+                funcionarios.append(funcionario_atual)
             
-            # Iniciar novo funcionário
-            employee_id, employee_name, sales_count = employee_match.groups()
-            current_employee = {
-                'id': employee_id.strip(),
-                'name': employee_name.strip(),
-                'sales_count': int(sales_count),
-                'products': [],
-                'total_quantity': 0.0,
-                'total_value': 0.0,
-                'participation': 0.0,
-                'gasolina_comum': 0.0,
-                'gasolina_vpower': 0.0,
-                'etanol_vpower': 0.0
+            # Inicia novo funcionário
+            codigo = int(match.group(1))
+            nome = match.group(2).strip()
+            vendas = int(match.group(3))
+            
+            funcionario_atual = {
+                'codigo': codigo,
+                'nome': nome,
+                'vendas': vendas,
+                'itens': [],
+                'total': None
             }
-            print(f"Found employee: {employee_name}")
+            itens_atual = []
             i += 1
             continue
         
-        # Identificar linha de produto
-        if current_employee and re.match(r'\|\s*\d+\s*\|', line):
-            # Dividir a linha, mantendo todos os campos, mesmo os vazios
-            parts = line.split('|')
-            # Debug: Processing product line
+        # Se estamos dentro de um bloco de funcionário
+        if funcionario_atual:
+            # Tenta parsear como item
+            item = parsear_linha_item(linha)
+            if item:
+                itens_atual.append(item)
             
-            if len(parts) >= 7:  # Adjusted to be more flexible
-                # Try to identify the correct column indices
-                code = parts[1].strip() if len(parts) > 1 else ""
-                product_name = parts[2].strip().upper() if len(parts) > 2 else ""
-                
-                # Find quantity and value columns (they should contain numbers)
-                quantity_str = ""
-                value_str = ""
-                
-                # Look for quantity and value in the remaining columns
-                for idx in range(3, len(parts)):
-                    part = parts[idx].strip()
-                    if part and re.match(r'[\d.,]+', part):
-                        if not quantity_str:
-                            quantity_str = part
-                        elif not value_str:
-                            value_str = part
-                            break
-                
-                # Debug: Product details parsed
-                
-                quantity = parse_brazilian_number(quantity_str)
-                value = parse_brazilian_number(value_str)
-                
-                if quantity is not None:
-                    product_info = {
-                        'code': code,
-                        'name': product_name,
-                        'quantity': quantity,
-                        'value': value if value is not None else 0.0
-                    }
-                    current_employee['products'].append(product_info)
-                    
-                    # Mapear produtos para os campos correspondentes
-                    # More flexible product name matching to handle variations
-                    product_matched = False
-                    
-                    # Check for Etanol Aditivado (V-Power equivalent)
-                    if ('ETANOL' in product_name and 'ADITIVADO' in product_name) or \
-                       ('ETANOL HIDRATADO COMUM ADITIVADO' in product_name) or \
-                       ('ETANOL ADITIVADO SHELL V-POWER' in product_name):
-                        current_employee['etanol_vpower'] += quantity  # Use += to handle multiple lines
-                        current_employee['total_quantity'] += quantity
-                        if value is not None:
-                            current_employee['total_value'] += value
-                        # Accumulated etanol_vpower
-                        product_matched = True
-                    
-                    # Check for Gasolina Aditivada (V-Power equivalent)
-                    elif ('GASOLINA' in product_name and 'ADITIVADA' in product_name) or \
-                         ('GASOLINA C COMUM ADITIVADA' in product_name) or \
-                         ('GASOLINA ADITIVADA V-POWER' in product_name):
-                        current_employee['gasolina_vpower'] += quantity  # Use += to handle multiple lines
-                        current_employee['total_quantity'] += quantity
-                        if value is not None:
-                            current_employee['total_value'] += value
-                        # Accumulated gasolina_vpower
-                        product_matched = True
-                    
-                    # Check for Gasolina Comum (regular gasoline)
-                    elif ('GASOLINA' in product_name and 'COMUM' in product_name and 'ADITIVADA' not in product_name) or \
-                         ('GASOLINA C COMUM' in product_name and 'ADITIVADA' not in product_name):
-                        current_employee['gasolina_comum'] += quantity  # Somar, caso haja múltiplas linhas
-                        current_employee['total_quantity'] += quantity
-                        if value is not None:
-                            current_employee['total_value'] += value
-                        # Accumulated gasolina_comum
-                        product_matched = True
-                    
-                    # Log unmatched products for debugging
-                    if not product_matched and 'DIESEL' not in product_name:
-                        print(f"Warning: Unmatched product: {product_name}")
-                    
-                    # Diesel é ignorado conforme especificado
-                    
-            i += 1
-            continue
-        
-        # Identificar linha de total do funcionário
-        if current_employee and 'Total do vendedor' in line:
-            # Found total line for employee
-            i += 1
-            continue
+            # Tenta parsear como total do funcionário
+            total = parsear_total_funcionario(linha)
+            if total:
+                funcionario_atual['total'] = total
+                # Não resetamos ainda, aguardamos próximo funcionário ou fim
         
         i += 1
     
-    # Adicionar o último funcionário, se existir
-    if current_employee:
-        report_data['employees'].append(current_employee)
+    # Adiciona último funcionário se existir
+    if funcionario_atual:
+        funcionario_atual['itens'] = itens_atual
+        funcionarios.append(funcionario_atual)
     
-    print(f"Successfully loaded {len(report_data['employees'])} employees")
+    return funcionarios
+
+
+def extrair_totais_gerais(linhas):
+    """
+    Extrai totais gerais do relatório.
     
-    return report_data
+    Args:
+        linhas: Lista de linhas do arquivo
+        
+    Returns:
+        dict: Dicionário com totais gerais
+    """
+    totais = {}
+    
+    # Procura pelas linhas de totais gerais
+    for linha in linhas:
+        # Procura por "Total geral de vendas no período"
+        if 'Total geral de vendas no período' in linha:
+            campos = [campo.strip() for campo in linha.split('|')]
+            campos = campos[1:-1]  # Remove primeiro e último (vazios)
+            
+            # A estrutura é: texto | quantidade | | valor |
+            # Então campos[1] = quantidade, campos[3] = valor
+            if len(campos) >= 4:
+                totais['quantidade'] = converter_numero_brasileiro(campos[1])
+                totais['valor'] = converter_numero_brasileiro(campos[3])
+            break
+    
+    # Se não encontrou "Total geral", tenta "Total de vendas da empresa"
+    if not totais:
+        for linha in linhas:
+            if 'Total de vendas da empresa' in linha:
+                campos = [campo.strip() for campo in linha.split('|')]
+                campos = campos[1:-1]
+                
+                # A estrutura é: texto | quantidade | | valor | percentual
+                if len(campos) >= 3:
+                    totais['quantidade'] = converter_numero_brasileiro(campos[2])
+                    totais['valor'] = converter_numero_brasileiro(campos[3])
+                break
+    
+    return totais
+
+
+def parsear_relatorio(caminho_arquivo: str):
+    """
+    Função principal que parseia o arquivo de relatório completo.
+    
+    Args:
+        caminho_arquivo: Caminho para o arquivo relatorio.txt
+        
+    Returns:
+        dict: Dicionário estruturado com todos os dados parseados
+    """
+    try:
+        with open(caminho_arquivo, 'r', encoding='utf-8') as f:
+            linhas = f.readlines()
+    except UnicodeDecodeError:
+        with open(caminho_arquivo, 'r', encoding='latin1') as f:
+            linhas = f.readlines()
+    
+    # Extrai cabeçalho
+    header = extrair_cabecalho(linhas)
+    
+    # Extrai funcionários
+    funcionarios = extrair_funcionarios(linhas)
+    
+    # Extrai totais gerais
+    totais_gerais = extrair_totais_gerais(linhas)
+    
+    resultado = {
+        'header': header,
+        'funcionarios': funcionarios,
+        'totaisGerais': totais_gerais
+    }
+    
+    return resultado
 
 class BonusCalculator:
     def __init__(self):
@@ -360,6 +491,7 @@ class BonusCalculator:
                 self.config = config
                 self.search_history = config.get('search_history', [])
                 self.mix_history = config.get('mix_history', {})
+                self.ensure_config_defaults()
                 
                 # Load last report update time
                 last_update_str = config.get('last_report_update')
@@ -394,6 +526,17 @@ class BonusCalculator:
                     {"min": 90, "max": 95, "value": 0.12},
                     {"min": 95, "max": 100, "value": 0.13}
                 ],
+                "mix_rule_type": "team",
+                "mix_rules": {
+                    "all_or_nothing": {
+                        "min_mix": 40.0,
+                        "bonus_per_liter": 0.02
+                    },
+                    "team": {
+                        "winner_bonus_per_liter": 0.0225,
+                        "loser_bonus_per_liter": 0.02
+                    }
+                },
                 "employee_settings": {},  # Include employee_settings in default config
                 "search_history": [],  # Add search history for admin access
                 "mix_history": {},  # Add mix history for comparison
@@ -403,10 +546,26 @@ class BonusCalculator:
             self.search_history = []
             self.mix_history = {}
             self.save_config()
+
+    def ensure_config_defaults(self):
+        if "bonus_rules" not in self.config:
+            self.config["bonus_rules"] = []
+        self.config.setdefault("mix_rule_type", "team")
+        self.config.setdefault("mix_rules", {})
+        self.config["mix_rules"].setdefault("all_or_nothing", {
+            "min_mix": 40.0,
+            "bonus_per_liter": 0.02
+        })
+        self.config["mix_rules"].setdefault("team", {
+            "winner_bonus_per_liter": 0.0225,
+            "loser_bonus_per_liter": 0.02
+        })
     
     def save_config(self):
         config = {
             "bonus_rules": self.config["bonus_rules"],
+            "mix_rule_type": self.config.get("mix_rule_type", "team"),
+            "mix_rules": self.config.get("mix_rules", {}),
             "last_directory": self.last_directory,
             "employee_settings": self.config.get("employee_settings", {}),
             "search_history": self.search_history,
@@ -571,11 +730,14 @@ class BonusCalculator:
         # Nova janela de opções administrativas
         admin_win = tk.Toplevel(self.window)
         admin_win.title("Opções de Administração")
-        admin_win.geometry("350x340")
+        admin_win.geometry("350x390")
         admin_win.grab_set()
         def open_settings():
             admin_win.destroy()
             self.show_employee_settings_window()
+        def open_mix_rules():
+            admin_win.destroy()
+            self.show_mix_rules_window()
         def open_file():
             admin_win.destroy()
             file_path = filedialog.askopenfilename(
@@ -603,7 +765,7 @@ class BonusCalculator:
                 elif team.startswith('B'):
                     teams['B'].append(emp)
             def calc_team_mix(team_emps):
-                total_premium = sum(e['gasolina_vpower'] + e['etanol_vpower'] for e in team_emps)
+                total_premium = sum(e['gasolina_vpower'] for e in team_emps)
                 total = sum(e['total_quantity'] for e in team_emps)
                 return (total_premium / total * 100) if total > 0 else 0.0
             mix_A = calc_team_mix(teams['A'])
@@ -618,7 +780,7 @@ class BonusCalculator:
                 emp_id = emp['id']
                 emp_name = emp['name']
                 total = emp['total_quantity']
-                premium = emp['gasolina_vpower'] + emp['etanol_vpower']
+                premium = emp['gasolina_vpower']
                 mix = (premium / total * 100) if total > 0 else 0.0
                 team = self.config.get('employee_settings', {}).get(emp_id, {"team": "A"}).get('team', 'A')
                 lines.append(f"{emp_id} - {emp_name} | Time: {team} | Mix: {mix:.2f}% | Total: {total:.2f} L\n")
@@ -641,6 +803,7 @@ class BonusCalculator:
             self.show_mix_history_window()
         
         ttk.Button(admin_win, text="Configurar Funcionários/Times", command=open_settings, style="TButton").pack(pady=10, fill=tk.X, padx=30)
+        ttk.Button(admin_win, text="Configurar Regras de Mix", command=open_mix_rules, style="TButton").pack(pady=10, fill=tk.X, padx=30)
         ttk.Button(admin_win, text="Alterar arquivo de relatório", command=open_file, style="TButton").pack(pady=10, fill=tk.X, padx=30)
         ttk.Button(admin_win, text="Gerar relatório de mix", command=generate_mix_report, style="TButton").pack(pady=10, fill=tk.X, padx=30)
         ttk.Button(admin_win, text="Histórico de Consultas", command=show_search_history, style="TButton").pack(pady=10, fill=tk.X, padx=30)
@@ -714,6 +877,97 @@ class BonusCalculator:
             settings_win.destroy()
         save_btn = ttk.Button(settings_win, text="Salvar", command=save_settings, style="TButton")
         save_btn.pack(pady=10)
+
+    def show_mix_rules_window(self):
+        """Show mix rules configuration window (admin only)."""
+        rules_win = tk.Toplevel(self.window)
+        rules_win.title("Configurar Regras de Mix")
+        rules_win.geometry("520x420")
+        rules_win.grab_set()
+
+        def format_number(value):
+            formatted = f"{value:.4f}".replace('.', ',')
+            return formatted.rstrip('0').rstrip(',') if ',' in formatted else formatted
+
+        current_rules = self.config.get("mix_rules", {})
+        all_or_nothing = current_rules.get("all_or_nothing", {})
+        team_rules = current_rules.get("team", {})
+
+        rule_type_var = tk.StringVar(value=self.config.get("mix_rule_type", "team"))
+
+        main_frame = ttk.Frame(rules_win, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text="Regra de Mix", font=('Roboto', 16, 'bold')).pack(anchor=tk.W, pady=(0, 10))
+
+        ttk.Radiobutton(
+            main_frame,
+            text="Tudo ou nada (mix individual)",
+            variable=rule_type_var,
+            value="all_or_nothing"
+        ).pack(anchor=tk.W)
+        ttk.Radiobutton(
+            main_frame,
+            text="Por time (vencedor x perdedor)",
+            variable=rule_type_var,
+            value="team"
+        ).pack(anchor=tk.W, pady=(0, 10))
+
+        all_frame = ttk.LabelFrame(main_frame, text="Tudo ou nada", padding="10")
+        all_frame.pack(fill=tk.X, pady=(5, 10))
+        ttk.Label(all_frame, text="Mix mínimo (%)").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        min_mix_var = tk.StringVar(value=format_number(all_or_nothing.get("min_mix", 40.0)))
+        ttk.Entry(all_frame, textvariable=min_mix_var, width=15).grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(all_frame, text="Valor por litro (R$)").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        all_bonus_var = tk.StringVar(value=format_number(all_or_nothing.get("bonus_per_liter", 0.02)))
+        ttk.Entry(all_frame, textvariable=all_bonus_var, width=15).grid(row=1, column=1, padx=5, pady=5)
+
+        team_frame = ttk.LabelFrame(main_frame, text="Por time", padding="10")
+        team_frame.pack(fill=tk.X, pady=(5, 10))
+        ttk.Label(team_frame, text="Valor vencedor (R$)").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        team_winner_var = tk.StringVar(value=format_number(team_rules.get("winner_bonus_per_liter", 0.0225)))
+        ttk.Entry(team_frame, textvariable=team_winner_var, width=15).grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(team_frame, text="Valor perdedor (R$)").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        team_loser_var = tk.StringVar(value=format_number(team_rules.get("loser_bonus_per_liter", 0.02)))
+        ttk.Entry(team_frame, textvariable=team_loser_var, width=15).grid(row=1, column=1, padx=5, pady=5)
+
+        def save_rules():
+            def parse_config_number(value):
+                value = value.strip()
+                if value and ',' not in value and value.count('.') == 1:
+                    value = value.replace('.', ',')
+                return converter_numero_brasileiro(value)
+
+            min_mix = parse_config_number(min_mix_var.get())
+            all_bonus = parse_config_number(all_bonus_var.get())
+            team_winner = parse_config_number(team_winner_var.get())
+            team_loser = parse_config_number(team_loser_var.get())
+
+            if min_mix < 0 or min_mix > 100:
+                messagebox.showerror("Erro", "O mix mínimo deve estar entre 0 e 100%.", parent=rules_win)
+                return
+            if any(value < 0 for value in [all_bonus, team_winner, team_loser]):
+                messagebox.showerror("Erro", "Os valores por litro não podem ser negativos.", parent=rules_win)
+                return
+
+            self.config["mix_rule_type"] = rule_type_var.get()
+            self.config["mix_rules"] = {
+                "all_or_nothing": {
+                    "min_mix": min_mix,
+                    "bonus_per_liter": all_bonus
+                },
+                "team": {
+                    "winner_bonus_per_liter": team_winner,
+                    "loser_bonus_per_liter": team_loser
+                }
+            }
+            self.save_config()
+            messagebox.showinfo("Sucesso", "Regras de mix salvas com sucesso!", parent=rules_win)
+            rules_win.destroy()
+
+        ttk.Button(main_frame, text="Salvar", command=save_rules, style="TButton").pack(pady=10)
     
     def show_search_history_window(self):
         """Show search history window (admin only)"""
@@ -1057,9 +1311,9 @@ class BonusCalculator:
             loading_widget = self.show_loading_message("⚙️ Processando dados...")
             
             # Parse the report
-            report_data = parse_relatorio(file_path)
+            report_data = parsear_relatorio(file_path)
             
-            if not report_data or not report_data['employees']:
+            if not report_data or not report_data['funcionarios']:
                 self.hide_loading_message(loading_widget)
                 messagebox.showerror("Erro", "O relatório não é válido ou está vazio.")
                 return
@@ -1072,23 +1326,44 @@ class BonusCalculator:
             employee_settings = self.config.get("employee_settings", {})
             settings_updated = False
             
-            for emp in report_data['employees']:
-                employee_name = f"{emp['id']} - {emp['name']}"
+            for emp in report_data['funcionarios']:
+                employee_id = str(emp['codigo'])
+                employee_name = f"{employee_id} - {emp['nome']}"
+                gasolina_comum = 0.0
+                gasolina_vpower = 0.0
+
+                for item in emp.get('itens', []):
+                    produto = item.get('produto', '').strip().upper()
+                    quantidade = item.get('quantidade', 0.0) or 0.0
+                    if produto == "GASOLINA C COMUM":
+                        gasolina_comum += quantidade
+                    elif produto == "GASOLINA C COMUM ADITIVADA":
+                        gasolina_vpower += quantidade
+
+                total_quantity = gasolina_comum + gasolina_vpower
+                emp_data = {
+                    'id': employee_id,
+                    'name': emp['nome'],
+                    'sales_count': emp['vendas'],
+                    'products': emp.get('itens', []),
+                    'total_quantity': total_quantity,
+                    'gasolina_comum': gasolina_comum,
+                    'gasolina_vpower': gasolina_vpower
+                }
                 self.employees.append(employee_name)
                 
                 # Calculate mix percentage
-                total = emp['gasolina_comum'] + emp['gasolina_vpower'] + emp['etanol_vpower']
-                mix = ((emp['gasolina_vpower'] + emp['etanol_vpower']) / total * 100) if total > 0 else 0.0
-                emp['mix'] = mix
+                mix = (gasolina_vpower / total_quantity * 100) if total_quantity > 0 else 0.0
+                emp_data['mix'] = mix
                 
                 # Update mix history for comparison
-                self.update_mix_history(emp['id'], employee_name, mix)
+                self.update_mix_history(employee_id, employee_name, mix)
                 
-                self.employee_data[employee_name] = emp
+                self.employee_data[employee_name] = emp_data
                 
                 # Add default team setting only if employee doesn't have one
-                if emp['id'] not in employee_settings:
-                    employee_settings[emp['id']] = {"team": "A"}
+                if employee_id not in employee_settings:
+                    employee_settings[employee_id] = {"team": "A"}
                     settings_updated = True
                     # Added default team setting for new employee
             
@@ -1239,8 +1514,6 @@ class BonusCalculator:
         self.window.title(f"Mix V-Power - {employee_name}")
         def format_brl(value, decimals=3):
             return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        def format_centavos(value):
-            return f'{value:.2f} Centavos'
         def format_brl_money(value):
             return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         self.result_text.delete(1.0, tk.END)
@@ -1268,7 +1541,10 @@ class BonusCalculator:
             return
 
         # Carregar todos os funcionários válidos (excluindo OIL)
-        valid_emps = [emp for emp in self.employee_data.values() if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') != 'OIL']
+        valid_emps = [
+            emp for emp in self.employee_data.values()
+            if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') not in ("OIL", "INACTIVE")
+        ]
         # Agrupar por time
         teams = {'A': [], 'B': []}
         for emp in valid_emps:
@@ -1279,7 +1555,7 @@ class BonusCalculator:
                 teams['B'].append(emp)
         # Calcular mix de cada time
         def calc_team_mix(team_emps):
-            total_premium = sum(e['gasolina_vpower'] + e['etanol_vpower'] for e in team_emps)
+            total_premium = sum(e['gasolina_vpower'] for e in team_emps)
             total = sum(e['total_quantity'] for e in team_emps)
             return (total_premium / total * 100) if total > 0 else 0.0
         mix_A = calc_team_mix(teams['A'])
@@ -1297,78 +1573,48 @@ class BonusCalculator:
         total_quantity = employee_data['total_quantity']
         if total_quantity > 0:
             gasolina_vpower = employee_data['gasolina_vpower']
-            etanol_vpower = employee_data['etanol_vpower']
-            premium_quantity = gasolina_vpower + etanol_vpower
+            premium_quantity = gasolina_vpower
             mix_percentage = (premium_quantity / total_quantity) * 100
         else:
             mix_percentage = 0
             premium_quantity = 0
-        # Determinar valor por litro (em centavos)
+        # Determinar valor por litro (em R$)
         team_mix = mix_A if emp_team.startswith('A') else mix_B
         if team_mix > mix_A and emp_team.startswith('A'):
             team_mix = mix_A
         if team_mix > mix_B and emp_team.startswith('B'):
             team_mix = mix_B
-        # Regras de bonificação
-        def get_bonus_cents(team_mix, is_winner):
-            if 35 < team_mix < 37.5:
-                return 0.0
-            elif 37.5 <= team_mix < 40:
-                return 1.25 if is_winner else 0.75
-            elif 40 <= team_mix < 45:
-                return 1.50 if is_winner else 1.00
-            elif 45 <= team_mix < 47.5:
-                return 1.75 if is_winner else 1.50
-            elif 47.5 <= team_mix < 50:
-                return 2.00 if is_winner else 1.75
-            elif team_mix >= 50:
-                return 2.25 if is_winner else 2.00
-            else:
-                return 0.0
         # Determinar se funcionário é noturno
         is_night = emp_team in ("A_NIGHT", "B_NIGHT")
         # Determinar se é vencedor
         is_winner = (winner is not None and emp_team.startswith(winner))
         is_loser = (loser is not None and emp_team.startswith(loser))
-        # Calcular bonificação
-        if is_winner:
-            bonus_per_liter = get_bonus_cents(team_mix, True)
-        elif is_loser:
-            bonus_per_liter = get_bonus_cents(team_mix, False)
+        mix_rule_type = self.config.get("mix_rule_type", "team")
+        mix_rules = self.config.get("mix_rules", {})
+        all_or_nothing = mix_rules.get("all_or_nothing", {})
+        team_rules = mix_rules.get("team", {})
+
+        if mix_rule_type == "all_or_nothing":
+            min_mix = all_or_nothing.get("min_mix", 40.0)
+            bonus_per_liter = all_or_nothing.get("bonus_per_liter", 0.0) if mix_percentage >= min_mix else 0.0
         else:
-            bonus_per_liter = 0.0
+            winner_bonus = team_rules.get("winner_bonus_per_liter", 0.0)
+            loser_bonus = team_rules.get("loser_bonus_per_liter", 0.0)
+            if is_winner:
+                bonus_per_liter = winner_bonus
+            elif is_loser:
+                bonus_per_liter = loser_bonus
+            else:
+                bonus_per_liter = loser_bonus if winner is None else 0.0
         # Aplicar 70% se noturno
         if is_night:
             bonus_per_liter *= 0.7
         total_bonus = premium_quantity * bonus_per_liter
-        # Calcular média de litragem do time (base_team)
         base_team = 'A' if emp_team.startswith('A') else 'B'
-        # Filtrar funcionários diurnos do mesmo time
-        diurnos = [emp for emp in valid_emps if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') == base_team]
-        # Calcular bonificação individual de cada diurno
-        diurno_bonuses = []
-        for emp in diurnos:
-            total_quantity = emp['total_quantity']
-            premium_quantity = emp['gasolina_vpower'] + emp['etanol_vpower'] if total_quantity > 0 else 0
-            # Recalcular mix do time (já feito acima)
-            # Recalcular se é vencedor
-            is_winner = (winner is not None and base_team == winner)
-            is_loser = (loser is not None and base_team == loser)
-            if is_winner:
-                bonus_per_liter = get_bonus_cents(team_mix, True)
-            elif is_loser:
-                bonus_per_liter = get_bonus_cents(team_mix, False)
-            else:
-                bonus_per_liter = 0.0
-            diurno_bonuses.append(premium_quantity * bonus_per_liter)
-        # Calcular média
-        if diurno_bonuses:
-            avg_bonus = sum(diurno_bonuses) / len(diurno_bonuses)
-        else:
-            avg_bonus = 0.0
-        # Para noturno, aplicar 0.7
-        if is_night:
-            avg_bonus *= 0.7
+        diurnos = [
+            emp for emp in valid_emps
+            if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') == base_team
+        ]
         # Exibir total de litros do funcionário (garantir que é o correto)
         total_litros_funcionario = employee_data['total_quantity']
         # Exibir média de litros do grupo (ativos, exceto OIL/INACTIVE)
@@ -1394,7 +1640,6 @@ class BonusCalculator:
         self.result_text.insert(tk.END, f"Time: {emp_team.replace('_NIGHT', ' (Noturno)').replace('OIL', 'Troca de Óleo')}\n", "normal")
         self.result_text.insert(tk.END, f"Gasolina C Comum: {format_brl(employee_data['gasolina_comum'])} litros\n", "normal")
         self.result_text.insert(tk.END, f"Gasolina C Comum Aditivada: {format_brl(employee_data['gasolina_vpower'])} litros\n", "normal")
-        self.result_text.insert(tk.END, f"Etanol Hidratado Comum Aditivado: {format_brl(employee_data['etanol_vpower'])} litros\n", "normal")
         self.result_text.insert(tk.END, f"Média de litragem do time: {format_brl(avg_team_liters_display)} litros\n", "normal")
         self.result_text.insert(tk.END, f"Total de litros do funcionário: {format_brl(total_litros_funcionario)} litros\n\n", "normal")
         # Get mix comparison for visual indicator
@@ -1421,69 +1666,13 @@ class BonusCalculator:
         self.result_text.tag_configure("mix_same", font=('Roboto', 15, 'bold'), foreground="#4169E1")  # Blue
         self.result_text.tag_configure("mix_new", font=('Roboto', 15, 'bold'), foreground="#FF8C00")  # Orange
         
+        rule_label = "Tudo ou nada (mix individual)" if mix_rule_type == "all_or_nothing" else "Por time (vencedor x perdedor)"
         self.result_text.insert(tk.END, f"{mix_display}\n", mix_tag)
-        self.result_text.insert(tk.END, f"Mix do Time: {format_brl(team_mix, 2)}%\n\n", "mix")
-        self.result_text.insert(tk.END, f"Bonificação por litro: {format_centavos(bonus_per_liter)}\n", "bonus_label")
-        # --- Regra especial: bonificação individual se mix 8% abaixo/acima do time ---
-        base_team = 'A' if emp_team.startswith('A') else 'B'
-        other_team_members = [emp for emp in teams[base_team] if emp['id'] != emp_id]
-        if other_team_members:
-            total_premium_others = sum(emp['gasolina_vpower'] + emp['etanol_vpower'] for emp in other_team_members)
-            total_litros_others = sum(emp['total_quantity'] for emp in other_team_members)
-            mix_others = (total_premium_others / total_litros_others * 100) if total_litros_others > 0 else 0.0
-        else:
-            mix_others = 0.0
-        aplica_bonificacao_individual = False
-        if mix_percentage < mix_others - 8 or mix_percentage > mix_others + 8:
-            aplica_bonificacao_individual = True
-        # Calcular bonificação individual se necessário
-        bonus_individual = 0.0
-        if aplica_bonificacao_individual:
-            def get_bonus_cents_individual(mix):
-                if 35 < mix < 37.5:
-                    return 0.0
-                elif 37.5 <= mix < 40:
-                    return 0.75
-                elif 40 <= mix < 45:
-                    return 1.00
-                elif 45 <= mix < 47.5:
-                    return 1.50
-                elif 47.5 <= mix < 50:
-                    return 1.75
-                elif mix >= 50:
-                    return 2.00
-                else:
-                    return 0.0
-            bonus_cents_individual = get_bonus_cents_individual(mix_percentage)
-            bonus_individual = premium_quantity * bonus_cents_individual
-            if emp_team in ("A_NIGHT", "B_NIGHT"):
-                bonus_individual *= 0.7
-        # Calcular bonificação estimada por empenho (apenas para diurnos do grupo)
-        empenho_bonus = 0.0
-        is_diurno = emp_team in ("A", "B")
-        if is_diurno:
-            diurnos_grupo = [emp for emp in teams[emp_team] if self.config.get('employee_settings', {}).get(emp['id'], {"team": "A"}).get('team') == base_team]
-            if diurnos_grupo and len(diurnos_grupo) > 1:
-                other_diurnos = [emp for emp in diurnos_grupo if emp['id'] != emp_id]
-                if other_diurnos:
-                    avg_team_liters = sum(emp['total_quantity'] for emp in other_diurnos) / len(other_diurnos)
-                    if total_litros_funcionario > avg_team_liters and avg_team_liters > 0:
-                        diff_percent = (total_litros_funcionario - avg_team_liters) / avg_team_liters
-                        # Bonificação estimada por empenho: percentual * bonificação principal
-                        if aplica_bonificacao_individual:
-                            empenho_bonus = diff_percent * bonus_individual
-                        else:
-                            empenho_bonus = diff_percent * avg_bonus
-        # Exibir bonificação principal para todos (diurnos e noturnos)
-        if aplica_bonificacao_individual and bonus_individual > 0:
-            self.result_text.insert(tk.END, "Bonificação individual por diferença de mix: ", "bonus_label")
-            self.result_text.insert(tk.END, f"{format_brl_money(bonus_individual/100)}\n", "bonus_value")
-        elif not aplica_bonificacao_individual and avg_bonus > 0:
-            self.result_text.insert(tk.END, "Valor estimado da bonificação: ", "bonus_label")
-            self.result_text.insert(tk.END, f"{format_brl_money(avg_bonus/100)}\n", "bonus_value")
-        if is_diurno and empenho_bonus > 0:
-            self.result_text.insert(tk.END, "Bonificação estimada por empenho: ", "bonus_label")
-            self.result_text.insert(tk.END, f"{format_brl_money(empenho_bonus/100)}\n", "bonus_value")
+        self.result_text.insert(tk.END, f"Mix do Time: {format_brl(team_mix, 2)}%\n", "mix")
+        self.result_text.insert(tk.END, f"Regra aplicada: {rule_label}\n\n", "normal")
+        self.result_text.insert(tk.END, f"Bonificação por litro: {format_brl_money(bonus_per_liter)}\n", "bonus_label")
+        self.result_text.insert(tk.END, "Valor estimado da bonificação: ", "bonus_label")
+        self.result_text.insert(tk.END, f"{format_brl_money(total_bonus)}\n", "bonus_value")
         self.result_text.config(state=tk.DISABLED)
     
     def copy_results(self):
