@@ -1,1 +1,5 @@
-Extrair Zip "Mix V-Power" que está na pasta Dist para instalar o programa.
+Extrair o ZIP "Mix V-Power" que está na pasta dist para instalar o programa.
+
+Para rodar pelo código fonte:
+1) python -m pip install -r requirements.txt
+2) python bonus_calculator.py

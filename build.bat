@@ -13,7 +13,7 @@ ECHO.
 REM Instala dependências
 ECHO Instalando dependências...
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ECHO.
 
 REM Gera o executável
@@ -23,10 +23,15 @@ ECHO.
 
 REM Cria pasta de distribuição
 ECHO Criando pacote de distribuição...
-mkdir "dist\Mix V-Power"
-move "dist\Mix V-Power.exe" "dist\Mix V-Power\"
+if not exist "dist\Mix V-Power" mkdir "dist\Mix V-Power"
+if exist "dist\Mix V-Power.exe" (
+    move "dist\Mix V-Power.exe" "dist\Mix V-Power\"
+) else (
+    ECHO Erro: executável não encontrado em dist.
+    PAUSE
+    exit /b 1
+)
 copy "Logo_Vpower.png" "dist\Mix V-Power\"
-copy "icons" "dist\Mix V-Power\icons\" /Y
 xcopy "icons" "dist\Mix V-Power\icons\" /E /I /Y
 copy "README.md" "dist\Mix V-Power\"
 copy "Leia-me.txt" "dist\Mix V-Power\"
@@ -34,7 +39,8 @@ ECHO.
 
 REM Cria arquivo ZIP
 ECHO Criando arquivo ZIP...
-powershell -command "Compress-Archive -Path 'dist\Mix V-Power' -DestinationPath 'dist\Mix-V-Power-Completo.zip' -Force"
+if exist "dist\Mix-V-Power-Completo.zip" del /f /q "dist\Mix-V-Power-Completo.zip"
+powershell -command "Compress-Archive -Path 'dist\Mix V-Power\*' -DestinationPath 'dist\Mix-V-Power-Completo.zip' -Force"
 ECHO.
 
 REM Mensagem final

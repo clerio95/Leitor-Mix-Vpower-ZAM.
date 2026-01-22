@@ -79,6 +79,4 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Distribution
-# Keep dist folder for releases but ignore temporary files
-dist/*.exe
-dist/*.zip
+dist/
