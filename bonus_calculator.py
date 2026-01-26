@@ -1,52 +1,122 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 import json
 import os
 import re
 import locale
 import sys
-import ctypes
-from PIL import Image, ImageTk
-from tkinter import Button as TkButton
-from tkinter import simpledialog
 import datetime
 
-class ToolTip:
-    """Simple tooltip class for widgets"""
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip = None
-        self.widget.bind("<Enter>", self.on_enter)
-        self.widget.bind("<Leave>", self.on_leave)
-    
-    def on_enter(self, event=None):
-        x, y, _, _ = self.widget.bbox("insert") if hasattr(self.widget, 'bbox') else (0, 0, 0, 0)
-        x += self.widget.winfo_rootx() + 20
-        y += self.widget.winfo_rooty() + 20
-        
-        self.tooltip = tk.Toplevel(self.widget)
-        self.tooltip.wm_overrideredirect(True)
-        self.tooltip.wm_geometry(f"+{x}+{y}")
-        
-        label = tk.Label(self.tooltip, text=self.text, background="#FFFFDD", 
-                        relief="solid", borderwidth=1, font=("Arial", 9))
-        label.pack()
-    
-    def on_leave(self, event=None):
-        if self.tooltip:
-            self.tooltip.destroy()
-            self.tooltip = None
+from PySide6 import QtCore, QtGui, QtWidgets
 
-# Hide terminal window on Windows
-if sys.platform == 'win32':
-    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 # Attempt to set Brazilian locale for number formatting
 try:
+    import locale
+
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-except locale.Error:
-    print("Warning: pt_BR.UTF-8 locale not available, using fallback number parsing.")
+except Exception:
+    pass
+
+
+def converter_numero_brasileiro(valor: str) -> float:
+    """
+    Converte número no formato brasileiro (1.234,567) para float.
+
+    Args:
+        valor: String com número no formato brasileiro
+
+    Returns:
+        float: Número convertido
+    """
+    if not valor or not valor.strip():
+        return 0.0
+
+    # Remove espaços e converte vírgula para ponto
+    valor = valor.strip().replace('.', '').replace(',', '.')
+
+    try:
+        return float(valor)
+    except ValueError:
+        return 0.0
+
+
+def extrair_cabecalho(linhas):
+    """
+    Extrai informações do cabeçalho do relatório.
+    Identifica linhas por palavras-chave semânticas.
+
+    Args:
+        linhas: Lista de linhas do arquivo
+
+    Returns:
+        dict: Dicionário com informações do cabeçalho
+    """
+    header = {}
+
+    for linha in linhas:
+        linha = linha.strip()
+
+        # Ignora linhas vazias ou de separação
+        if not linha or linha.startswith('+') or linha.startswith('-'):
+            continue
+
+        # Extrai Empresa
+        match = re.search(r'Empresa:\s*(.+?)\s*\|\s*$', linha, re.IGNORECASE)
+        if match:
+            header['empresa'] = match.group(1).strip()
+
+        # Extrai Período
+        match = re.search(r'Período:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['periodo'] = match.group(1).strip()
+
+        # Extrai Modo
+        match = re.search(r'Modo:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['modo'] = match.group(1).strip()
+
+        # Extrai Agrupar
+        match = re.search(r'Agrupar:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['agrupar'] = match.group(1).strip()
+
+        # Extrai Ordenar
+        match = re.search(r'Ordenar:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['ordenar'] = match.group(1).strip()
+
+        # Extrai Produtividade
+        match = re.search(r'Produtividade:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['produtividade'] = match.group(1).strip()
+
+        # Extrai Grupo empresa
+        match = re.search(r'Grupo empresa:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['grupo_empresa'] = match.group(1).strip()
+
+        # Extrai Grupo produto
+        match = re.search(r'Grupo produto:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['grupo_produto'] = match.group(1).strip()
+
+        # Extrai Exibir
+        match = re.search(r'Exibir:\s*(.+)', linha, re.IGNORECASE)
+        if match:
+            header['exibir'] = match.group(1).strip()
+
+        # Para quando encontrar a primeira linha de tabela (início dos funcionários)
+        if 'Funcionário:' in linha and 'Vendas:' in linha:
+            break
+
+    return header
+
+
+def parsear_linha_item(linha):
+    """
+    Parseia uma linha de item da tabela de produtos.
+
+    Args:
+        linha: Linha do arquivo contendo dados do item
 
 def converter_numero_brasileiro(valor: str) -> float:
     """
@@ -155,6 +225,25 @@ def parsear_linha_item(linha):
     # Ignora linhas de separação ou cabeçalho
     if not linha.strip() or linha.strip().startswith('+') or 'Código' in linha or 'Produto' in linha:
         return None
+
+    # Verifica se é uma linha de item (começa e termina com |)
+    if not linha.strip().startswith('|') or not linha.strip().endswith('|'):
+        return None
+
+    # Verifica se é linha de total do vendedor
+    if 'Total do vendedor' in linha:
+        return None
+
+    # Divide pelos separadores |
+    campos = [campo.strip() for campo in linha.split('|')]
+
+    # Remove primeiro e último elemento (vazios devido ao | inicial e final)
+    campos = campos[1:-1]
+
+    # Deve ter exatamente 7 campos
+    if len(campos) != 7:
+        return None
+
     
     # Verifica se é uma linha de item (começa e termina com |)
     if not linha.strip().startswith('|') or not linha.strip().endswith('|'):
@@ -192,6 +281,10 @@ def parsear_linha_item(linha):
 def parsear_total_funcionario(linha):
     """
     Extrai informações do total do funcionário.
+
+    Args:
+        linha: Linha contendo o total do vendedor
+
     
     Args:
         linha: Linha contendo o total do vendedor
@@ -201,6 +294,13 @@ def parsear_total_funcionario(linha):
     """
     if 'Total do vendedor e participação geral nas vendas' not in linha:
         return None
+
+    # Divide pelos separadores |
+    campos = [campo.strip() for campo in linha.split('|')]
+
+    # Remove primeiro e último elemento
+    campos = campos[1:-1]
+
     
     # Divide pelos separadores |
     campos = [campo.strip() for campo in linha.split('|')]
@@ -212,6 +312,7 @@ def parsear_total_funcionario(linha):
     # Então temos: [texto, '', quantidade, '', valor, percentual]
     if len(campos) < 6:
         return None
+
     
     try:
         # Campos estão nas posições: 2 (quantidade), 4 (valor), 5 (percentual)
@@ -223,6 +324,25 @@ def parsear_total_funcionario(linha):
         return total
     except (ValueError, IndexError):
         return None
+
+
+def extrair_funcionarios(linhas):
+    """
+    Extrai todos os blocos de funcionários e seus itens vendidos.
+
+    Args:
+        linhas: Lista de linhas do arquivo
+
+    Returns:
+        list: Lista de dicionários com dados dos funcionários
+    """
+    funcionarios = []
+    funcionario_atual = None
+    itens_atual = []
+
+    i = 0
+    while i < len(linhas):
+        linha = linhas[i]
 
 
 def extrair_funcionarios(linhas):
@@ -250,11 +370,13 @@ def extrair_funcionarios(linhas):
             if funcionario_atual:
                 funcionario_atual['itens'] = itens_atual
                 funcionarios.append(funcionario_atual)
+
             
             # Inicia novo funcionário
             codigo = int(match.group(1))
             nome = match.group(2).strip()
             vendas = int(match.group(3))
+
             
             funcionario_atual = {
                 'codigo': codigo,
@@ -266,6 +388,7 @@ def extrair_funcionarios(linhas):
             itens_atual = []
             i += 1
             continue
+
         
         # Se estamos dentro de um bloco de funcionário
         if funcionario_atual:
@@ -273,12 +396,16 @@ def extrair_funcionarios(linhas):
             item = parsear_linha_item(linha)
             if item:
                 itens_atual.append(item)
+
             
             # Tenta parsear como total do funcionário
             total = parsear_total_funcionario(linha)
             if total:
                 funcionario_atual['total'] = total
                 # Não resetamos ainda, aguardamos próximo funcionário ou fim
+
+        i += 1
+
         
         i += 1
     
@@ -286,6 +413,7 @@ def extrair_funcionarios(linhas):
     if funcionario_atual:
         funcionario_atual['itens'] = itens_atual
         funcionarios.append(funcionario_atual)
+
     
     return funcionarios
 
@@ -293,6 +421,10 @@ def extrair_funcionarios(linhas):
 def extrair_totais_gerais(linhas):
     """
     Extrai totais gerais do relatório.
+
+    Args:
+        linhas: Lista de linhas do arquivo
+
     
     Args:
         linhas: Lista de linhas do arquivo
@@ -301,6 +433,7 @@ def extrair_totais_gerais(linhas):
         dict: Dicionário com totais gerais
     """
     totais = {}
+
     
     # Procura pelas linhas de totais gerais
     for linha in linhas:
@@ -308,6 +441,7 @@ def extrair_totais_gerais(linhas):
         if 'Total geral de vendas no período' in linha:
             campos = [campo.strip() for campo in linha.split('|')]
             campos = campos[1:-1]  # Remove primeiro e último (vazios)
+
             
             # A estrutura é: texto | quantidade | | valor |
             # Então campos[1] = quantidade, campos[3] = valor
@@ -315,6 +449,7 @@ def extrair_totais_gerais(linhas):
                 totais['quantidade'] = converter_numero_brasileiro(campos[1])
                 totais['valor'] = converter_numero_brasileiro(campos[3])
             break
+
     
     # Se não encontrou "Total geral", tenta "Total de vendas da empresa"
     if not totais:
@@ -322,12 +457,14 @@ def extrair_totais_gerais(linhas):
             if 'Total de vendas da empresa' in linha:
                 campos = [campo.strip() for campo in linha.split('|')]
                 campos = campos[1:-1]
+
                 
                 # A estrutura é: texto | quantidade | | valor | percentual
                 if len(campos) >= 3:
                     totais['quantidade'] = converter_numero_brasileiro(campos[2])
                     totais['valor'] = converter_numero_brasileiro(campos[3])
                 break
+
     
     return totais
 
@@ -335,6 +472,10 @@ def extrair_totais_gerais(linhas):
 def parsear_relatorio(caminho_arquivo: str):
     """
     Função principal que parseia o arquivo de relatório completo.
+
+    Args:
+        caminho_arquivo: Caminho para o arquivo relatorio.txt
+
     
     Args:
         caminho_arquivo: Caminho para o arquivo relatorio.txt
@@ -368,121 +509,25 @@ def parsear_relatorio(caminho_arquivo: str):
 
 class BonusCalculator:
     def __init__(self):
-        self.window = tk.Tk()
-        self.window.title("Mix V-Power - Calculadora de Bonificação")
-        self.window.geometry("800x600")
-        
-        # Set minimum window size
-        self.window.minsize(600, 400)
-        
-        # Initialize search history and mix history
-        self.search_history = []
-        self.mix_history = {}  # Store previous mix percentages for comparison
-        # Definir ícone do programa
-        try:
-            self.window.iconbitmap("icons/iconV.ico")
-        except Exception as e:
-            print(f"Erro ao definir ícone: {e}")
-        # Configurar cores Shell V-Power
-        self.shell_red = '#ED1C24'
-        self.shell_yellow = '#FFD500'
-        self.shell_white = '#FFFFFF'
-        self.shell_bg = self.shell_white
-        self.shell_fg = self.shell_red
-        self.window.configure(bg=self.shell_bg)
-        
-        # Configure styles
-        self.style = ttk.Style()
-        self.style.theme_use('clam')  # Use clam theme as base
-        
-        # Estilos com base nas cores Shell
-        self.style.configure("TFrame", background=self.shell_bg)
-        self.style.configure("TLabel", background=self.shell_bg, foreground=self.shell_fg, font=('Roboto', 14))
-        self.style.configure("Title.TLabel", background=self.shell_bg, foreground=self.shell_red, font=('Roboto', 36, 'bold'))
-        self.style.configure("Result.TLabel", background=self.shell_bg, foreground=self.shell_fg, font=('Roboto', 16))
-        self.style.configure("Mix.TLabel", background=self.shell_bg, foreground=self.shell_red, font=('Roboto', 20, 'bold'))
-        self.style.configure("TButton", 
-                           background=self.shell_red, 
-                           foreground=self.shell_white,
-                           font=('Roboto', 14),
-                           padding=10,
-                           borderwidth=0,
-                           relief="flat",
-                           focuscolor="none")  # Remove focus outline
-        
-        # Disable hover effects to prevent flashing
-        self.style.map("TButton",
-                      background=[('active', self.shell_red),    # Keep same color on hover
-                                ('pressed', self.shell_red)],     # Keep same color when pressed
-                      foreground=[('active', self.shell_white),
-                                ('pressed', self.shell_white)],
-                      relief=[('pressed', 'flat'),
-                             ('active', 'flat')])
-        
-        self.style.configure("Cog.TButton",
-                           background="#FFFFFF",  # Branco
-                           foreground="black",
-                           borderwidth=0,
-                           relief="flat",
-                           focuscolor="none")
-        
-        # Disable cog button hover effects
-        self.style.map("Cog.TButton",
-                      background=[('active', '#FFFFFF'),    # Keep same white background
-                                ('pressed', '#FFFFFF')],     # Keep same white background
-                      foreground=[('active', 'black'),
-                                ('pressed', 'black')],
-                      relief=[('pressed', 'flat'),
-                             ('active', 'flat')])
-        
-        self.style.configure("Update.TButton", 
-                           background=self.shell_red, 
-                           foreground=self.shell_white, 
-                           font=('Roboto', 14, 'bold'), 
-                           padding=10, 
-                           relief="flat",
-                           focuscolor="none")
-        
-        # Disable Update button hover effects too
-        self.style.map("Update.TButton", 
-                      background=[('active', self.shell_red),    # Keep same red background
-                                ('pressed', self.shell_red)],     # Keep same red background
-                      foreground=[('active', self.shell_white),
-                                ('pressed', self.shell_white)])
-        # Estilo para botão refresh só ícone, sem fundo/borda
-        self.style.configure("Icon.TButton", 
-                           background=self.shell_bg, 
-                           foreground=self.shell_fg, 
-                           font=('Roboto', 28, 'bold'), 
-                           borderwidth=0, 
-                           relief="flat", 
-                           padding=0,
-                           focuscolor="none")
-        
-        # Disable icon button hover effects completely
-        self.style.map("Icon.TButton",
-                      background=[('active', self.shell_bg),  # Keep same background
-                                ('pressed', self.shell_bg)],
-                      foreground=[('active', self.shell_fg),  # Keep same text color
-                                ('pressed', self.shell_fg)],
-                      relief=[('pressed', 'flat'),
-                             ('active', 'flat')])
-        
-        self.employee_code = tk.StringVar()  # Substitui username por employee_code
-        self.employees = []
-        self.last_report_update = None  # Track when the report was last loaded
-        self.search_history = []  # Track search history
-        
-        # Load last directory
+        super().__init__()
+        self.setWindowTitle("Mix V-Power - Calculadora de Bonificação")
+        self.setMinimumSize(900, 600)
+        self.setWindowIcon(QtGui.QIcon("icons/iconV.ico"))
+
+        self.primary_color = "#FFFFFF"
+        self.secondary_yellow = "#FFD500"
+        self.secondary_red = "#ED1C24"
+
         self.config_file = "config.json"
+        self.last_directory = os.getcwd()
+        self.last_report_update = None
+        self.employee_data = {}
+        self.employees = []
+
         self.load_config()
-        
-        # Create login widgets
-        self.create_login_widgets()
-        
-        # Load report
+        self.build_ui()
         self.load_report()
-    
+
     def load_config(self):
         try:
             with open(self.config_file, 'r') as f:
@@ -572,160 +617,203 @@ class BonusCalculator:
             "mix_history": self.mix_history,
             "last_report_update": self.last_report_update.isoformat() if self.last_report_update else None
         }
-        # Saving configuration
-        with open(self.config_file, 'w') as f:
-            json.dump(config, f, indent=4)
-    
-    def create_login_widgets(self):
-        for widget in self.window.winfo_children():
-            widget.destroy()
-        
-        # Não usar marca d'água, logo será exibida abaixo do botão Entrar
-        main_frame = ttk.Frame(self.window, padding="30")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.window.grid_rowconfigure(0, weight=1)
-        self.window.grid_columnconfigure(0, weight=1)
-        main_frame.grid_columnconfigure(0, weight=1)
-        login_frame = ttk.Frame(main_frame, padding="20")
-        login_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        login_frame.grid_columnconfigure(0, weight=1)
-        ttk.Label(login_frame, text="Mix V-Power", style="Title.TLabel").grid(row=0, column=0, pady=(0, 40))
-        ttk.Label(login_frame, text="Código do Funcionário:", style="TLabel").grid(row=1, column=0, pady=10)
-        code_entry = ttk.Entry(login_frame, textvariable=self.employee_code, width=30, font=('Roboto', 20))
-        code_entry.grid(row=2, column=0, pady=(0, 30))
-        
-        # Add Enter key binding and focus
-        code_entry.bind('<Return>', lambda event: self.login())
-        code_entry.focus_set()  # Set focus to the entry field
-        
-        # Add input validation and visual feedback
-        def on_code_change(*args):
+        if os.path.exists(self.config_file):
             try:
-                if code_entry.winfo_exists():
-                    code = self.employee_code.get().strip()
-                    if code and code.isdigit():
-                        code_entry.configure(style="Valid.TEntry")
-                    elif code:
-                        code_entry.configure(style="Invalid.TEntry")
-                    else:
-                        code_entry.configure(style="TEntry")
-            except:
-                pass  # Widget may have been destroyed
-        
-        # Store the trace id so we can remove it later
-        self.trace_id = self.employee_code.trace('w', on_code_change)
-        
-        # Configure entry styles for validation feedback
-        self.style.configure("Valid.TEntry", fieldbackground="#E8F5E8")
-        self.style.configure("Invalid.TEntry", fieldbackground="#FFE8E8")
-        
-        # Add status bar with helpful information
-        status_frame = ttk.Frame(main_frame)
-        status_frame.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=(20, 0))
-        
-        if hasattr(self, 'employees') and self.employees:
-            # Add last update time if available
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+            except json.JSONDecodeError:
+                self.config = default_config
+        else:
+            self.config = default_config
+        self.config.setdefault("mix_rule_type", "team")
+        self.config.setdefault("mix_rules", default_config["mix_rules"])
+        self.config.setdefault("employee_settings", {})
+
+    def save_config(self):
+        with open(self.config_file, 'w', encoding='utf-8') as f:
+            json.dump(self.config, f, indent=4, ensure_ascii=False)
+
+    def build_ui(self):
+        central = QtWidgets.QWidget()
+        central.setStyleSheet(f"background-color: {self.primary_color};")
+        self.setCentralWidget(central)
+
+        self.stack = QtWidgets.QStackedWidget()
+
+        self.login_page = self.build_login_page()
+        self.result_page = self.build_result_page()
+
+        self.stack.addWidget(self.login_page)
+        self.stack.addWidget(self.result_page)
+
+        layout = QtWidgets.QVBoxLayout(central)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.addWidget(self.stack)
+
+    def build_login_page(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        logo = QtWidgets.QLabel()
+        pixmap = QtGui.QPixmap("Logo_Vpower.png")
+        logo.setPixmap(pixmap.scaledToWidth(260, QtCore.Qt.TransformationMode.SmoothTransformation))
+        logo.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        title = QtWidgets.QLabel("Mix V-Power")
+        title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
+            "font-size: 32px; font-weight: 700; color: #ED1C24;"
+        )
+
+        self.code_input = QtWidgets.QLineEdit()
+        self.code_input.setPlaceholderText("Código do funcionário")
+        self.code_input.setFixedWidth(320)
+        self.code_input.setStyleSheet(
+            "padding: 10px; font-size: 18px; border: 2px solid #FFD500; border-radius: 10px;"
+        )
+        self.code_input.returnPressed.connect(self.handle_login)
+
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.login_button = QtWidgets.QPushButton("Entrar")
+        self.login_button.clicked.connect(self.handle_login)
+        self.login_button.setStyleSheet(
+            "background-color: #ED1C24; color: white; font-size: 18px; padding: 10px 30px;"
+            "border-radius: 12px;"
+        )
+
+        self.refresh_button = QtWidgets.QToolButton()
+        self.refresh_button.setIcon(QtGui.QIcon("icons/atualizar.png"))
+        self.refresh_button.setIconSize(QtCore.QSize(32, 32))
+        self.refresh_button.setToolTip("Atualizar relatório")
+        self.refresh_button.setStyleSheet(
+            "background-color: transparent; border: none; padding: 8px;"
+        )
+        self.refresh_button.clicked.connect(self.reload_report)
+
+        self.refresh_spinner = QtWidgets.QProgressBar()
+        self.refresh_spinner.setFixedWidth(120)
+        self.refresh_spinner.setRange(0, 0)
+        self.refresh_spinner.setVisible(False)
+        self.refresh_spinner.setStyleSheet(
+            "QProgressBar {border: 1px solid #FFD500; border-radius: 6px; text-align: center;}"
+            "QProgressBar::chunk {background-color: #FFD500;}"
+        )
+
+        button_row.addWidget(self.login_button)
+        button_row.addSpacing(20)
+        button_row.addWidget(self.refresh_button)
+        button_row.addWidget(self.refresh_spinner)
+
+        self.status_label = QtWidgets.QLabel("")
+        self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet("font-size: 12px; color: #ED1C24;")
+
+        layout.addWidget(logo)
+        layout.addSpacing(10)
+        layout.addWidget(title)
+        layout.addSpacing(20)
+        layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(20)
+        layout.addLayout(button_row)
+        layout.addSpacing(10)
+        layout.addWidget(self.status_label)
+
+        return widget
+
+    def build_result_page(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        top_row = QtWidgets.QHBoxLayout()
+        back_button = QtWidgets.QPushButton("Voltar")
+        back_button.clicked.connect(lambda: self.switch_page(self.login_page))
+        back_button.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
+            "border-radius: 10px;"
+        )
+        top_row.addWidget(back_button, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+        top_row.addStretch()
+
+        self.employee_name_label = QtWidgets.QLabel("")
+        self.employee_name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.employee_name_label.setStyleSheet(
+            "font-size: 28px; font-weight: 700; color: #ED1C24;"
+        )
+
+        self.mix_label = QtWidgets.QLabel("")
+        self.mix_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.mix_label.setStyleSheet(
+            "font-size: 40px; font-weight: 800; color: #ED1C24;"
+        )
+
+        self.info_grid = QtWidgets.QGridLayout()
+        self.info_grid.setHorizontalSpacing(20)
+        self.info_grid.setVerticalSpacing(10)
+
+        self.labels = {}
+        fields = [
+            ("Time", "time"),
+            ("Gasolina Comum (L)", "comum"),
+            ("V-Power (L)", "vpower"),
+            ("Total de litros (L)", "total"),
+            ("Bonificação por litro", "bonus_per_liter"),
+            ("Valor estimado", "bonus_total"),
+            ("Relatório atualizado", "update_time"),
+        ]
+        for row, (label, key) in enumerate(fields):
+            name_label = QtWidgets.QLabel(label + ":")
+            name_label.setStyleSheet("font-size: 14px; color: #333;")
+            value_label = QtWidgets.QLabel("-")
+            value_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #111;")
+            self.labels[key] = value_label
+            self.info_grid.addWidget(name_label, row, 0)
+            self.info_grid.addWidget(value_label, row, 1)
+
+        layout.addLayout(top_row)
+        layout.addSpacing(20)
+        layout.addWidget(self.employee_name_label)
+        layout.addWidget(self.mix_label)
+        layout.addSpacing(20)
+        layout.addLayout(self.info_grid)
+        layout.addStretch()
+
+        return widget
+
+    def update_status(self):
+        if self.employees:
             update_info = ""
             if self.last_report_update:
                 update_time = self.last_report_update.strftime("%d/%m/%Y às %H:%M")
                 update_info = f" | 🕒 Atualizado em {update_time}"
-            
-            status_text = f"📊 {len(self.employees)} funcionários carregados{update_info} | 💡 Pressione Enter para entrar"
+            self.status_label.setText(f"📊 {len(self.employees)} funcionários carregados{update_info}")
         else:
-            status_text = "⚠️ Nenhum relatório carregado | 🔄 Clique no botão de atualizar"
-            
-        status_label = ttk.Label(status_frame, text=status_text, style="TLabel", font=('Roboto', 10))
-        status_label.pack()
-        # Frame para botões lado a lado
-        button_frame = ttk.Frame(login_frame)
-        button_frame.grid(row=3, column=0, pady=20)
-        
-        enter_button = ttk.Button(button_frame, text="Entrar", command=self.login, style="TButton")
-        enter_button.pack(side=tk.LEFT, padx=(0, 10), anchor="center")
-        ToolTip(enter_button, "Clique ou pressione Enter para fazer login")
-        
-        reload_button = TkButton(button_frame, text="🔄", command=self.reload_report, font=("Roboto", 28, "bold"), bd=0, relief="flat", bg=self.shell_bg, activebackground=self.shell_bg, fg=self.shell_fg, activeforeground=self.shell_fg, highlightthickness=0, padx=0, pady=0)
-        reload_button.pack(side=tk.LEFT, anchor="center")
-        ToolTip(reload_button, "Recarregar relatório")
-        # Exibir logo V-Power centralizada abaixo do botão Entrar
-        try:
-            logo_img = Image.open("Logo_Vpower.png").convert("RGBA")
-            max_width, max_height = 500, 200
-            orig_width, orig_height = logo_img.size
-            ratio = min(max_width / orig_width, max_height / orig_height, 1.0)
-            new_width = int(orig_width * ratio)
-            new_height = int(orig_height * ratio)
-            logo_img = logo_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            self.logo_photo = ImageTk.PhotoImage(logo_img)
-            logo_label = ttk.Label(login_frame, image=self.logo_photo, background=self.shell_bg)
-            logo_label.grid(row=4, column=0, pady=(30, 0))
-        except Exception as e:
-            print(f"Erro ao carregar logo V-Power: {e}")
-        
-        # Botão de configuração (cog) com fundo branco
-        try:
-            cog_image = Image.open("icons/cog.ico")
-            cog_image = cog_image.resize((20, 20), Image.Resampling.LANCZOS)
-            background = Image.new('RGBA', (20, 20), (255, 255, 255, 255))  # Fundo branco
-            bg_width, bg_height = background.size
-            cog_width, cog_height = cog_image.size
-            x = (bg_width - cog_width) // 2
-            y = (bg_height - cog_height) // 2
-            background.paste(cog_image, (x, y), cog_image if cog_image.mode == 'RGBA' else None)
-            cog_photo = ImageTk.PhotoImage(background)
-            self.style.configure(
-                "Cog.TButton",
-                background="#FFFFFF",  # Branco
-                foreground="black",
-                borderwidth=0,
-                relief="flat"
+            self.status_label.setText("⚠️ Nenhum relatório carregado")
+
+    def show_buffering(self, active: bool):
+        self.refresh_spinner.setVisible(active)
+        self.refresh_button.setEnabled(not active)
+        self.login_button.setEnabled(not active)
+
+    def load_report(self):
+        self.show_buffering(True)
+        QtWidgets.QApplication.processEvents()
+
+        default_report = os.path.join(self.last_directory, "relatorio.txt")
+        if os.path.exists(default_report):
+            file_path = default_report
+        else:
+            file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Selecione o arquivo de relatório",
+                self.last_directory,
+                "Arquivos de texto (*.txt);;Todos os arquivos (*.*)"
             )
-            cog_button = ttk.Button(
-                self.window,
-                image=cog_photo,
-                command=self.select_report_file,
-                style="Cog.TButton",
-                width=1
-            )
-            cog_button.image = cog_photo
-            def position_cog_button():
-                try:
-                    window_width = self.window.winfo_width()
-                    window_height = self.window.winfo_height()
-                    x = window_width - 30
-                    y = window_height - 30
-                    if cog_button.winfo_exists():
-                        cog_button.place(x=x, y=y)
-                except:
-                    pass  # Button may have been destroyed
-            position_cog_button()
-            self.window.bind('<Configure>', lambda e: position_cog_button())
-        except Exception as e:
-            print(f"Error loading cog icon: {e}")
-            fallback_button = ttk.Button(
-                self.window,
-                text="⚙",
-                command=self.select_report_file,
-                style="Cog.TButton"
-            )
-            def position_fallback_button():
-                try:
-                    window_width = self.window.winfo_width()
-                    window_height = self.window.winfo_height()
-                    x = window_width - 30
-                    y = window_height - 30
-                    if fallback_button.winfo_exists():
-                        fallback_button.place(x=x, y=y)
-                except:
-                    pass  # Button may have been destroyed
-            position_fallback_button()
-            self.window.bind('<Configure>', lambda e: position_fallback_button())
-    
-    def select_report_file(self):
-        # Prompt de senha antes de abrir a configuração
-        password = simpledialog.askstring("Senha de administrador", "Digite a senha para acessar as configurações:", show='*', parent=self.window)
-        if password != "Zam1234@":
-            messagebox.showerror("Erro", "Senha incorreta!")
+        if not file_path:
+            self.show_buffering(False)
             return
         # Nova janela de opções administrativas
         admin_win = tk.Toplevel(self.window)
@@ -814,64 +902,49 @@ class BonusCalculator:
         if not hasattr(self, 'employee_data') or not self.employee_data:
             messagebox.showerror("Erro", "Nenhum relatório carregado. Carregue um relatório antes de configurar funcionários.")
             return
-        # Janela de configuração
-        settings_win = tk.Toplevel(self.window)
-        settings_win.title("Configuração de Funcionários e Times")
-        settings_win.geometry("600x500")
-        settings_win.grab_set()
-        # Times disponíveis
-        teams = [
-            ("A", "Time A"),
-            ("B", "Time B"),
-            ("A_NIGHT", "Noturno Time A"),
-            ("B_NIGHT", "Noturno Time B"),
-            ("OIL", "Troca de Óleo (sem bonificação)"),
-            ("INACTIVE", "Funcionário Desativado")
-        ]
-        # Carregar configurações existentes
+
+        self.employees = []
+        self.employee_data = {}
+
         employee_settings = self.config.get("employee_settings", {})
-        # Frame de rolagem
-        canvas = tk.Canvas(settings_win)
-        frame = ttk.Frame(canvas)
-        scrollbar = ttk.Scrollbar(settings_win, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        canvas.create_window((0, 0), window=frame, anchor='nw')
-        def on_configure(event):
-            canvas.configure(scrollregion=canvas.bbox('all'))
-        frame.bind('<Configure>', on_configure)
-        # Widgets para cada funcionário
-        row = 0
-        emp_vars = {}
-        for emp_name, emp_data in self.employee_data.items():
-            emp_id = emp_data['id']
-            label = ttk.Label(frame, text=f"{emp_id} - {emp_data['name']}", style="TLabel")
-            label.grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-            var = tk.StringVar()
-            # Get the current team value and convert it to the corresponding label
-            current_team = employee_settings.get(emp_id, {}).get('team', 'A')
-            current_label = "Time A"  # Default
-            for tval, tlabel in teams:
-                if tval == current_team:
-                    current_label = tlabel
-                    break
-            var.set(current_label)
-            emp_vars[emp_id] = var
-            option = ttk.Combobox(frame, textvariable=var, values=[t[1] for t in teams], state="readonly", width=30)
-            option.grid(row=row, column=1, padx=5, pady=5)
-            row += 1
-        # Botão salvar
-        def save_settings():
-            new_settings = {}
-            for emp_id, var in emp_vars.items():
-                team_label = var.get()
-                # Mapear label para valor
-                for tval, tlabel in teams:
-                    if tlabel == team_label:
-                        new_settings[emp_id] = {"team": tval}
-                        break
-            self.config["employee_settings"] = new_settings
+        settings_updated = False
+
+        for emp in report_data['funcionarios']:
+            employee_id = str(emp['codigo'])
+            employee_name = f"{employee_id} - {emp['nome']}"
+            gasolina_comum = 0.0
+            gasolina_vpower = 0.0
+
+            for item in emp.get('itens', []):
+                produto = item.get('produto', '').strip().upper()
+                quantidade = item.get('quantidade', 0.0) or 0.0
+                if produto == "GASOLINA C COMUM":
+                    gasolina_comum += quantidade
+                elif produto == "GASOLINA C COMUM ADITIVADA":
+                    gasolina_vpower += quantidade
+
+            total_quantity = gasolina_comum + gasolina_vpower
+            mix = (gasolina_vpower / total_quantity * 100) if total_quantity > 0 else 0.0
+
+            emp_data = {
+                'id': employee_id,
+                'name': emp['nome'],
+                'sales_count': emp['vendas'],
+                'total_quantity': total_quantity,
+                'gasolina_comum': gasolina_comum,
+                'gasolina_vpower': gasolina_vpower,
+                'mix': mix
+            }
+
+            self.employee_data[employee_name] = emp_data
+            self.employees.append(employee_name)
+
+            if employee_id not in employee_settings:
+                employee_settings[employee_id] = {"team": "A"}
+                settings_updated = True
+
+        if settings_updated:
+            self.config["employee_settings"] = employee_settings
             self.save_config()
             messagebox.showinfo("Salvo", "Configurações salvas com sucesso!")
             settings_win.destroy()
@@ -1387,126 +1460,47 @@ class BonusCalculator:
         if not self.employees:
             messagebox.showwarning("Aviso", "Erro ao carregar o relatório. Selecione um arquivo de relatório válido.")
             return
-        
-        code = self.employee_code.get().strip()
-        
-        if not code:
-            messagebox.showerror("Erro", "Por favor, insira o código do funcionário")
-            self.focus_entry_field()
+
+        self.show_employee_results(employee_name)
+        self.switch_page(self.result_page)
+
+    def switch_page(self, target):
+        current = self.stack.currentWidget()
+        if current == target:
             return
-        
-        # Show loading state
-        original_cursor = self.window.cget("cursor")
-        self.window.config(cursor="wait")
-        self.window.update()
-        
-        try:
-            employee_name = None
-            for emp_name in self.employees:
-                emp_id = emp_name.split(" - ", 1)[0].strip()
-                if code == emp_id:
-                    employee_name = emp_name
-                    break
-            
-            if not employee_name:
-                messagebox.showerror("Erro", f"Funcionário com código '{code}' não encontrado")
-                # Clear the entry and refocus
-                self.employee_code.set("")
-                self.focus_entry_field()
-                return
-            
-            # Track the search in history
-            employee_id = employee_name.split(" - ", 1)[0].strip()
-            self.add_to_search_history(employee_name, employee_id)
-            
-            self.create_result_widgets()
-            self.show_employee_results(employee_name)
-            
-        finally:
-            # Restore cursor
-            self.window.config(cursor=original_cursor)
-    
-    def focus_entry_field(self):
-        """Helper method to focus on the employee code entry field"""
-        def find_and_focus(widget):
-            if isinstance(widget, ttk.Entry):
-                widget.focus_set()
-                return True
-            for child in widget.winfo_children():
-                if find_and_focus(child):
-                    return True
-            return False
-        find_and_focus(self.window)
-    
-    def add_to_search_history(self, employee_name, employee_id):
-        """Add a search to the history (admin only feature)"""
-        import datetime
-        
-        search_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
-            "employee_id": employee_id,
-            "employee_name": employee_name
-        }
-        
-        # Add to beginning of list
-        self.search_history.insert(0, search_entry)
-        
-        # Keep only last 50 searches
-        self.search_history = self.search_history[:50]
-        
-        # Save to config
-        self.save_config()
-    
-    def migrate_search_history(self):
-        """Migrate old search history format to new format"""
-        migrated = False
-        new_history = []
-        
-        for entry in self.search_history:
-            if 'employee_name' not in entry and 'code' in entry:
-                # Old format - migrate
-                migrated = True
-                # Skip migration for now, just clear old entries
-                continue
-            else:
-                # New format - keep
-                new_history.append(entry)
-        
-        if migrated:
-            self.search_history = new_history
-            self.save_config()
-    
-    def update_mix_history(self, employee_id, employee_name, current_mix):
-        """Update mix history for an employee"""
-        # Store current mix as the new "previous" mix for next comparison
-        self.mix_history[employee_id] = {
-            "name": employee_name,
-            "mix": current_mix,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        self.save_config()
-    
-    def get_mix_comparison(self, employee_id, current_mix):
-        """Get mix comparison data for an employee"""
-        if employee_id not in self.mix_history:
-            return None
-        
-        previous_mix = self.mix_history[employee_id]["mix"]
-        difference = current_mix - previous_mix
-        
-        if abs(difference) < 0.01:  # Less than 0.01% difference is considered no change
-            return {"status": "same", "difference": 0, "previous": previous_mix}
-        elif difference > 0:
-            return {"status": "up", "difference": difference, "previous": previous_mix}
-        else:
-            return {"status": "down", "difference": abs(difference), "previous": previous_mix}
-    
-    def get_bonus_value(self, mix_percentage):
-        for rule in self.config["bonus_rules"]:
-            if rule["min"] <= mix_percentage < rule["max"]:
-                return rule["value"]
-        return 0.0
-    
+
+        target_index = self.stack.indexOf(target)
+        self.fade_transition(target_index)
+
+    def fade_transition(self, target_index):
+        current_widget = self.stack.currentWidget()
+        effect = QtWidgets.QGraphicsOpacityEffect(current_widget)
+        current_widget.setGraphicsEffect(effect)
+
+        fade_out = QtCore.QPropertyAnimation(effect, b"opacity")
+        fade_out.setDuration(200)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+
+        def on_fade_out():
+            current_widget.setGraphicsEffect(None)
+            self.stack.setCurrentIndex(target_index)
+            new_widget = self.stack.currentWidget()
+            effect_in = QtWidgets.QGraphicsOpacityEffect(new_widget)
+            new_widget.setGraphicsEffect(effect_in)
+
+            fade_in = QtCore.QPropertyAnimation(effect_in, b"opacity")
+            fade_in.setDuration(200)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.finished.connect(lambda: new_widget.setGraphicsEffect(None))
+            fade_in.start()
+            self._fade_in_anim = fade_in
+
+        fade_out.finished.connect(on_fade_out)
+        fade_out.start()
+        self._fade_out_anim = fade_out
+
     def show_employee_results(self, employee_name):
         employee_data = self.employee_data[employee_name]
         
@@ -1522,22 +1516,12 @@ class BonusCalculator:
         emp_settings = self.config.get('employee_settings', {}).get(emp_id, {"team": "A"})
         emp_team = emp_settings.get('team', 'A')
 
-        # Se funcionário for OIL ou INACTIVE, mostrar mensagem especial e não mostrar mix/bonificação
         if emp_team in ("OIL", "INACTIVE"):
-            self.result_text.tag_configure("title", font=('Roboto', 16, 'bold'), foreground=self.shell_red)
-            self.result_text.tag_configure("normal", font=('Roboto', 12), foreground=self.shell_fg)
-            self.result_text.insert(tk.END, f"Funcionário: {employee_name}\n", "title")
-            
-            # Add last report update time
-            if self.last_report_update:
-                update_time = self.last_report_update.strftime("%d/%m/%Y às %H:%M")
-                self.result_text.insert(tk.END, f"Relatório atualizado em: {update_time}\n\n", "normal")
-            else:
-                self.result_text.insert(tk.END, "\n", "normal")
-            
-            self.result_text.insert(tk.END, f"Time: {emp_team.replace('OIL', 'Troca de Óleo').replace('INACTIVE', 'Desativado')}\n", "normal")
-            self.result_text.insert(tk.END, "Este funcionário não participa do cálculo de bonificação.\n", "normal")
-            self.result_text.config(state=tk.DISABLED)
+            QtWidgets.QMessageBox.information(
+                self,
+                "Sem bonificação",
+                "Este funcionário não participa do cálculo de bonificação."
+            )
             return
 
         # Carregar todos os funcionários válidos (excluindo OIL)
@@ -1553,23 +1537,24 @@ class BonusCalculator:
                 teams['A'].append(emp)
             elif team.startswith('B'):
                 teams['B'].append(emp)
-        # Calcular mix de cada time
+
         def calc_team_mix(team_emps):
             total_premium = sum(e['gasolina_vpower'] for e in team_emps)
             total = sum(e['total_quantity'] for e in team_emps)
             return (total_premium / total * 100) if total > 0 else 0.0
-        mix_A = calc_team_mix(teams['A'])
-        mix_B = calc_team_mix(teams['B'])
-        # Determinar vencedora
-        if mix_A > mix_B:
+
+        mix_a = calc_team_mix(teams['A'])
+        mix_b = calc_team_mix(teams['B'])
+
+        winner = None
+        loser = None
+        if mix_a > mix_b:
             winner = 'A'
             loser = 'B'
-        elif mix_B > mix_A:
+        elif mix_b > mix_a:
             winner = 'B'
             loser = 'A'
-        else:
-            winner = loser = None  # Empate
-        # Calcular mix do funcionário
+
         total_quantity = employee_data['total_quantity']
         if total_quantity > 0:
             gasolina_vpower = employee_data['gasolina_vpower']
