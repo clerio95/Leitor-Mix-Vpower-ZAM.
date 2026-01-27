@@ -595,6 +595,9 @@ class BonusCalculator(QtWidgets.QMainWindow):
         target_index = self.stack.indexOf(target)
         self.fade_transition(target_index)
 
+    def return_to_login(self):
+        self.switch_page(self.login_page)
+
     def fade_transition(self, target_index):
         current_widget = self.stack.currentWidget()
         effect = QtWidgets.QGraphicsOpacityEffect(current_widget)
