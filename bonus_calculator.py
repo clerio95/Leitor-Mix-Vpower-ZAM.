@@ -796,6 +796,32 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def reload_report(self):
         self.load_report()
 
+    def open_settings(self):
+        self.save_config()
+        config_path = os.path.abspath(self.config_file)
+
+        message = QtWidgets.QMessageBox(self)
+        message.setWindowTitle("Configurações")
+        message.setIcon(QtWidgets.QMessageBox.Icon.Information)
+        message.setText(
+            "As configurações são salvas no arquivo config.json.\n"
+            "Clique em “Abrir config” para editar manualmente."
+        )
+        open_button = message.addButton("Abrir config", QtWidgets.QMessageBox.ButtonRole.ActionRole)
+        message.addButton("Fechar", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+        message.exec()
+
+        if message.clickedButton() == open_button:
+            opened = QtGui.QDesktopServices.openUrl(
+                QtCore.QUrl.fromLocalFile(config_path)
+            )
+            if not opened:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Não foi possível abrir",
+                    f"Não foi possível abrir o arquivo:\n{config_path}"
+                )
+
     @staticmethod
     def format_brl(value, decimals=3):
         return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
