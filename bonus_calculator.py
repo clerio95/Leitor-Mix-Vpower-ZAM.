@@ -520,7 +520,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         for emp in report_data['funcionarios']:
             employee_id = str(emp['codigo'])
             employee_name = emp['nome']
-            display_name = employee_name
+            display_name = f"{employee_id} - {employee_name}"
 
             gasolina_comum = 0.0
             gasolina_vpower = 0.0
@@ -713,10 +713,24 @@ class BonusCalculator(QtWidgets.QMainWindow):
             if diurnos else 0.0
         )
 
+        comparison = self.get_mix_comparison(employee_data)
         mix_text = f"Mix: {self.format_brl(mix_percentage, 2)}%"
         mix_style = "font-size: 40px; font-weight: 800; color: #ED1C24;"
+        if comparison:
+            if comparison["status"] == "up":
+                mix_text += f" ↗️ (+{self.format_brl(comparison['difference'], 2)}%)"
+                mix_style = "font-size: 40px; font-weight: 800; color: #228B22;"
+            elif comparison["status"] == "down":
+                mix_text += f" ↘️ (-{self.format_brl(comparison['difference'], 2)}%)"
+                mix_style = "font-size: 40px; font-weight: 800; color: #DC143C;"
+            else:
+                mix_text += " ➡️"
+                mix_style = "font-size: 40px; font-weight: 800; color: #4169E1;"
+        else:
+            mix_text += " 🆕"
+            mix_style = "font-size: 40px; font-weight: 800; color: #FF8C00;"
 
-        self.employee_name_label.setText(employee_data['name'])
+        self.employee_name_label.setText(employee_data['display_name'])
         self.mix_label.setText(mix_text)
         self.mix_label.setStyleSheet(mix_style)
 
@@ -726,7 +740,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.labels["comum"].setText(self.format_brl(employee_data['gasolina_comum']))
         self.labels["vpower"].setText(self.format_brl(employee_data['gasolina_vpower']))
         self.labels["total"].setText(self.format_brl(total_quantity))
-        self.labels["bonus_per_liter"].setText(self.format_brl_money(bonus_per_liter, decimals=3))
+        self.labels["bonus_per_liter"].setText(self.format_brl_money(bonus_per_liter))
         self.labels["bonus_total"].setText(self.format_brl_money(total_bonus))
 
         if self.last_report_update:
@@ -746,6 +760,25 @@ class BonusCalculator(QtWidgets.QMainWindow):
         )
         self.mix_label.setToolTip(tooltip)
 
+    def get_mix_comparison(self, employee_data):
+        previous_mix = employee_data.get("previous_mix")
+        if previous_mix is None:
+            return None
+
+        current_mix = employee_data.get("mix", 0.0)
+        difference = current_mix - previous_mix
+        if abs(difference) < 0.01:
+            status = "same"
+        elif difference > 0:
+            status = "up"
+        else:
+            status = "down"
+
+        return {
+            "status": status,
+            "difference": abs(difference)
+        }
+
     def add_to_search_history(self, employee_code, employee_name):
         history_entry = {
             "employee_id": employee_code,
@@ -763,26 +796,13 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def reload_report(self):
         self.load_report()
 
-    def return_to_login(self):
-        self.code_input.clear()
-        self.code_input.setFocus()
-        self.switch_page(self.login_page)
-
-    def setup_shortcuts(self):
-        self.escape_shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
-        self.escape_shortcut.activated.connect(self.return_to_login)
-
-    def open_settings(self):
-        config_path = os.path.abspath(self.config_file)
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(config_path))
-
     @staticmethod
     def format_brl(value, decimals=3):
         return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
     @staticmethod
-    def format_brl_money(value, decimals=2):
-        return f'R$ {value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    def format_brl_money(value):
+        return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
 if __name__ == "__main__":
