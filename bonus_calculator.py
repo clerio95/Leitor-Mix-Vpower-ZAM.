@@ -278,6 +278,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         self.load_config()
         self.build_ui()
+        self.setup_shortcuts()
         self.load_report()
 
     def load_config(self):
@@ -352,6 +353,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.code_input.setFixedWidth(320)
         self.code_input.setStyleSheet(
             "padding: 10px; font-size: 18px; border: 2px solid #FFD500; border-radius: 10px;"
+            "color: #111; background-color: #FFFFFF;"
         )
         self.code_input.returnPressed.connect(self.handle_login)
 
@@ -386,17 +388,26 @@ class BonusCalculator(QtWidgets.QMainWindow):
         button_row.addWidget(self.refresh_button)
         button_row.addWidget(self.refresh_spinner)
 
+        settings_button = QtWidgets.QPushButton("Configurações")
+        settings_button.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
+            "border-radius: 10px;"
+        )
+        settings_button.clicked.connect(self.open_settings)
+
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.status_label.setStyleSheet("font-size: 12px; color: #ED1C24;")
 
-        layout.addWidget(logo)
-        layout.addSpacing(10)
         layout.addWidget(title)
+        layout.addSpacing(20)
+        layout.addWidget(logo)
         layout.addSpacing(20)
         layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(20)
         layout.addLayout(button_row)
+        layout.addSpacing(10)
+        layout.addWidget(settings_button, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(10)
         layout.addWidget(self.status_label)
 
@@ -409,7 +420,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         top_row = QtWidgets.QHBoxLayout()
         back_button = QtWidgets.QPushButton("Voltar")
-        back_button.clicked.connect(lambda: self.switch_page(self.login_page))
+        back_button.clicked.connect(self.return_to_login)
         back_button.setStyleSheet(
             "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
             "border-radius: 10px;"
@@ -459,14 +470,11 @@ class BonusCalculator(QtWidgets.QMainWindow):
         return widget
 
     def update_status(self):
-        if self.employees:
-            update_info = ""
-            if self.last_report_update:
-                update_time = self.last_report_update.strftime("%d/%m/%Y às %H:%M")
-                update_info = f" | 🕒 Atualizado em {update_time}"
-            self.status_label.setText(f"📊 {len(self.employees)} funcionários carregados{update_info}")
+        if self.last_report_update:
+            update_time = self.last_report_update.strftime("%d/%m/%Y às %H:%M")
+            self.status_label.setText(f"Atualizado em {update_time}")
         else:
-            self.status_label.setText("⚠️ Nenhum relatório carregado")
+            self.status_label.setText("")
 
     def show_buffering(self, active: bool):
         self.refresh_spinner.setVisible(active)
@@ -577,6 +585,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.add_to_search_history(employee['id'], employee['display_name'])
         self.show_employee_results(code)
         self.switch_page(self.result_page)
+        self.code_input.clear()
 
     def switch_page(self, target):
         current = self.stack.currentWidget()
