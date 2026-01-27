@@ -334,6 +334,13 @@ class BonusCalculator(QtWidgets.QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.addWidget(self.stack)
 
+    def setup_shortcuts(self):
+        self.shortcut_escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
+        self.shortcut_escape.activated.connect(self.handle_escape)
+
+        self.shortcut_copy = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+C"), self)
+        self.shortcut_copy.activated.connect(self.copy_results_to_clipboard)
+
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
@@ -595,6 +602,36 @@ class BonusCalculator(QtWidgets.QMainWindow):
         target_index = self.stack.indexOf(target)
         self.fade_transition(target_index)
 
+    def return_to_login(self):
+        self.switch_page(self.login_page)
+
+    def handle_escape(self):
+        if self.stack.currentWidget() == self.result_page:
+            self.return_to_login()
+        else:
+            if self.code_input.text():
+                self.code_input.clear()
+            else:
+                self.close()
+
+    def copy_results_to_clipboard(self):
+        if self.stack.currentWidget() != self.result_page:
+            return
+
+        lines = [
+            self.employee_name_label.text(),
+            self.mix_label.text(),
+            f"Time: {self.labels['time'].text()}",
+            f"Gasolina Comum (L): {self.labels['comum'].text()}",
+            f"V-Power (L): {self.labels['vpower'].text()}",
+            f"Total de litros (L): {self.labels['total'].text()}",
+            f"Bonificação por litro: {self.labels['bonus_per_liter'].text()}",
+            f"Valor estimado: {self.labels['bonus_total'].text()}",
+            f"Relatório atualizado: {self.labels['update_time'].text()}",
+        ]
+
+        QtWidgets.QApplication.clipboard().setText("\n".join(lines))
+
     def fade_transition(self, target_index):
         current_widget = self.stack.currentWidget()
         effect = QtWidgets.QGraphicsOpacityEffect(current_widget)
@@ -795,6 +832,32 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
     def reload_report(self):
         self.load_report()
+
+    def open_settings(self):
+        self.save_config()
+        config_path = os.path.abspath(self.config_file)
+
+        message = QtWidgets.QMessageBox(self)
+        message.setWindowTitle("Configurações")
+        message.setIcon(QtWidgets.QMessageBox.Icon.Information)
+        message.setText(
+            "As configurações são salvas no arquivo config.json.\n"
+            "Clique em “Abrir config” para editar manualmente."
+        )
+        open_button = message.addButton("Abrir config", QtWidgets.QMessageBox.ButtonRole.ActionRole)
+        message.addButton("Fechar", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+        message.exec()
+
+        if message.clickedButton() == open_button:
+            opened = QtGui.QDesktopServices.openUrl(
+                QtCore.QUrl.fromLocalFile(config_path)
+            )
+            if not opened:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Não foi possível abrir",
+                    f"Não foi possível abrir o arquivo:\n{config_path}"
+                )
 
     @staticmethod
     def format_brl(value, decimals=3):
