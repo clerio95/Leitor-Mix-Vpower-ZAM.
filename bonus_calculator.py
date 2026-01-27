@@ -605,30 +605,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def return_to_login(self):
         self.switch_page(self.login_page)
 
-    def handle_escape(self):
-        if self.stack.currentWidget() == self.result_page:
-            self.return_to_login()
-        else:
-            self.close()
-
-    def copy_results_to_clipboard(self):
-        if self.stack.currentWidget() != self.result_page:
-            return
-
-        lines = [
-            self.employee_name_label.text(),
-            self.mix_label.text(),
-            f"Time: {self.labels['time'].text()}",
-            f"Gasolina Comum (L): {self.labels['comum'].text()}",
-            f"V-Power (L): {self.labels['vpower'].text()}",
-            f"Total de litros (L): {self.labels['total'].text()}",
-            f"Bonificação por litro: {self.labels['bonus_per_liter'].text()}",
-            f"Valor estimado: {self.labels['bonus_total'].text()}",
-            f"Relatório atualizado: {self.labels['update_time'].text()}",
-        ]
-
-        QtWidgets.QApplication.clipboard().setText("\n".join(lines))
-
     def fade_transition(self, target_index):
         current_widget = self.stack.currentWidget()
         effect = QtWidgets.QGraphicsOpacityEffect(current_widget)
