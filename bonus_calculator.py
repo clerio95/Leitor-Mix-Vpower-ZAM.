@@ -334,6 +334,13 @@ class BonusCalculator(QtWidgets.QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.addWidget(self.stack)
 
+    def setup_shortcuts(self):
+        self.shortcut_escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
+        self.shortcut_escape.activated.connect(self.handle_escape)
+
+        self.shortcut_copy = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+C"), self)
+        self.shortcut_copy.activated.connect(self.copy_results_to_clipboard)
+
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
