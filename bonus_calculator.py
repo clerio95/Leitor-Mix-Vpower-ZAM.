@@ -341,6 +341,34 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.shortcut_copy = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+C"), self)
         self.shortcut_copy.activated.connect(self.copy_results_to_clipboard)
 
+    def handle_escape(self):
+        # Se estiver na tela de resultado, volta pro login; senão fecha o app
+        current = self.stack.currentWidget()
+        if current == self.result_page:
+            self.return_to_login()
+        else:
+            self.close()
+
+    def copy_results_to_clipboard(self):
+        # Copia um resumo do resultado atual (se houver funcionário exibido)
+        emp = self.employee_name_label.text().strip()
+        if not emp:
+            return
+
+        texto = (
+            f"{emp}\n"
+            f"{self.mix_label.text()}\n"
+            f"Time: {self.labels['time'].text()}\n"
+            f"Comum: {self.labels['comum'].text()} L\n"
+            f"V-Power: {self.labels['vpower'].text()} L\n"
+            f"Total: {self.labels['total'].text()} L\n"
+            f"Bônus/L: {self.labels['bonus_per_liter'].text()}\n"
+            f"Total: {self.labels['bonus_total'].text()}\n"
+            f"Relatório: {self.labels['update_time'].text()}\n"
+        )
+
+        QtWidgets.QApplication.clipboard().setText(texto)
+
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
@@ -395,11 +423,11 @@ class BonusCalculator(QtWidgets.QMainWindow):
         button_row.addWidget(self.refresh_button)
         button_row.addWidget(self.refresh_spinner)
 
-        settings_button = QtWidgets.QPushButton("Configurações")
-        settings_button.setStyleSheet(
-            "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
-            "border-radius: 10px;"
-        )
+        settings_button = QtWidgets.QToolButton()
+        settings_button.setIcon(QtGui.QIcon("icons/cog.ico"))
+        settings_button.setIconSize(QtCore.QSize(24, 24))
+        settings_button.setToolTip("Configurações")
+        settings_button.setStyleSheet("background-color: transparent; border: none; padding: 6px;")
         settings_button.clicked.connect(self.open_settings)
 
         self.status_label = QtWidgets.QLabel("")
@@ -408,15 +436,18 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         layout.addWidget(title)
         layout.addSpacing(20)
-        layout.addWidget(logo)
-        layout.addSpacing(20)
         layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(20)
+        layout.addWidget(logo)
         layout.addSpacing(20)
         layout.addLayout(button_row)
         layout.addSpacing(10)
-        layout.addWidget(settings_button, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(10)
         layout.addWidget(self.status_label)
+        layout.addStretch()
+        layout.addWidget(
+            settings_button,
+            alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
+        )
 
         return widget
 
@@ -424,16 +455,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
-
-        top_row = QtWidgets.QHBoxLayout()
-        back_button = QtWidgets.QPushButton("Voltar")
-        back_button.clicked.connect(self.return_to_login)
-        back_button.setStyleSheet(
-            "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
-            "border-radius: 10px;"
-        )
-        top_row.addWidget(back_button, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
-        top_row.addStretch()
 
         self.employee_name_label = QtWidgets.QLabel("")
         self.employee_name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -444,6 +465,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.mix_label.setStyleSheet("font-size: 40px; font-weight: 800; color: #ED1C24;")
 
         self.info_grid = QtWidgets.QGridLayout()
+        self.info_grid.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.info_grid.setHorizontalSpacing(20)
         self.info_grid.setVerticalSpacing(10)
 
@@ -466,13 +488,22 @@ class BonusCalculator(QtWidgets.QMainWindow):
             self.info_grid.addWidget(name_label, row, 0)
             self.info_grid.addWidget(value_label, row, 1)
 
-        layout.addLayout(top_row)
-        layout.addSpacing(20)
         layout.addWidget(self.employee_name_label)
         layout.addWidget(self.mix_label)
         layout.addSpacing(20)
         layout.addLayout(self.info_grid)
         layout.addStretch()
+
+        back_button = QtWidgets.QPushButton("Voltar")
+        back_button.clicked.connect(self.return_to_login)
+        back_button.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 14px; padding: 6px 20px;"
+            "border-radius: 10px;"
+        )
+        back_row = QtWidgets.QHBoxLayout()
+        back_row.addStretch()
+        back_row.addWidget(back_button)
+        layout.addLayout(back_row)
 
         return widget
 
@@ -736,10 +767,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
             else:
                 mix_text += " ➡️"
                 mix_style = "font-size: 40px; font-weight: 800; color: #4169E1;"
-        else:
-            mix_text += " 🆕"
-            mix_style = "font-size: 40px; font-weight: 800; color: #FF8C00;"
-
         self.employee_name_label.setText(employee_data['display_name'])
         self.mix_label.setText(mix_text)
         self.mix_label.setStyleSheet(mix_style)
@@ -750,7 +777,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.labels["comum"].setText(self.format_brl(employee_data['gasolina_comum']))
         self.labels["vpower"].setText(self.format_brl(employee_data['gasolina_vpower']))
         self.labels["total"].setText(self.format_brl(total_quantity))
-        self.labels["bonus_per_liter"].setText(self.format_brl_money(bonus_per_liter))
+        self.labels["bonus_per_liter"].setText(self.format_brl_money(bonus_per_liter, decimals=3))
         self.labels["bonus_total"].setText(self.format_brl_money(total_bonus))
 
         if self.last_report_update:
@@ -837,8 +864,8 @@ class BonusCalculator(QtWidgets.QMainWindow):
         return f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
     @staticmethod
-    def format_brl_money(value):
-        return f'R$ {value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    def format_brl_money(value, decimals=2):
+        return f'R$ {value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
 if __name__ == "__main__":
