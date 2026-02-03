@@ -227,30 +227,16 @@ def parsear_relatorio(caminho_arquivo: str):
 
 DEFAULT_CONFIG = {
     "bonus_rules": [
-        {"min": 0, "max": 35, "value": 0.0},
-        {"min": 35, "max": 40, "value": 0.01},
-        {"min": 40, "max": 45, "value": 0.02},
-        {"min": 45, "max": 50, "value": 0.03},
-        {"min": 50, "max": 55, "value": 0.04},
-        {"min": 55, "max": 60, "value": 0.05},
-        {"min": 60, "max": 65, "value": 0.06},
-        {"min": 65, "max": 70, "value": 0.07},
-        {"min": 70, "max": 75, "value": 0.08},
-        {"min": 75, "max": 80, "value": 0.09},
-        {"min": 80, "max": 85, "value": 0.10},
-        {"min": 85, "max": 90, "value": 0.11},
-        {"min": 90, "max": 95, "value": 0.12},
-        {"min": 95, "max": 100, "value": 0.13}
+        {"min": 35, "max": 40, "winner": 0.01, "loser": 0.01},
+        {"min": 40, "max": 45, "winner": 0.015, "loser": 0.015},
+        {"min": 45, "max": 50, "winner": 0.02, "loser": 0.02},
+        {"min": 50, "max": 50, "winner": 0.0225, "loser": 0.02}
     ],
     "mix_rule_type": "team",
     "mix_rules": {
         "all_or_nothing": {
             "min_mix": 40.0,
             "bonus_per_liter": 0.02
-        },
-        "team": {
-            "winner_bonus_per_liter": 0.0225,
-            "loser_bonus_per_liter": 0.02
         }
     },
     "employee_settings": {},
@@ -679,7 +665,9 @@ class BonusCalculator(QtWidgets.QMainWindow):
         except (FileNotFoundError, json.JSONDecodeError):
             self.config = DEFAULT_CONFIG.copy()
 
-        self.config.setdefault("bonus_rules", DEFAULT_CONFIG["bonus_rules"])
+        self.config["bonus_rules"] = self.normalize_bonus_rules(
+            self.config.get("bonus_rules", DEFAULT_CONFIG["bonus_rules"])
+        )
         self.config.setdefault("mix_rule_type", "team")
         self.config.setdefault("mix_rules", DEFAULT_CONFIG["mix_rules"])
         self.config.setdefault("employee_settings", {})
@@ -697,6 +685,36 @@ class BonusCalculator(QtWidgets.QMainWindow):
                 self.last_report_update = datetime.datetime.fromisoformat(last_update_str)
             except ValueError:
                 self.last_report_update = None
+
+    @staticmethod
+    def normalize_bonus_rules(bonus_rules):
+        default_rules = copy.deepcopy(DEFAULT_CONFIG["bonus_rules"])
+        normalized = []
+        for rule in bonus_rules:
+            min_value = rule.get("min")
+            max_value = rule.get("max")
+            if min_value is None or max_value is None:
+                continue
+            if "winner" in rule or "loser" in rule:
+                normalized.append({
+                    "min": min_value,
+                    "max": max_value,
+                    "winner": rule.get("winner", 0.0),
+                    "loser": rule.get("loser", 0.0),
+                })
+            else:
+                value = rule.get("value", 0.0)
+                normalized.append({
+                    "min": min_value,
+                    "max": max_value,
+                    "winner": value,
+                    "loser": value,
+                })
+
+        if not normalized:
+            return default_rules
+
+        return normalized
 
     def save_config(self):
         self.config["last_directory"] = self.last_directory
