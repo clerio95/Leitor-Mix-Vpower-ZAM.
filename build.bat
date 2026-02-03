@@ -12,6 +12,14 @@ ECHO.
 
 REM Instala dependências
 ECHO Instalando dependências...
+python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor<=12) else 1)"
+if errorlevel 1 (
+    ECHO Erro: Python 3.12 ou inferior é necessário para PySide6.
+    ECHO Versão detectada: 
+    python --version
+    PAUSE
+    exit /b 1
+)
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 if errorlevel 1 (

@@ -134,7 +134,7 @@ As regras são configuráveis via interface admin:
 ### 🔧 **Dependências Principais**
 ```
 Pillow==11.0.0          # Processamento de imagens
-PySide6==6.7.3          # Interface gráfica
+PySide6==6.10.2         # Interface gráfica
 pyinstaller==6.11.1     # Geração de executáveis
 ```
 

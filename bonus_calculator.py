@@ -888,11 +888,13 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.labels = {}
         fields = [
             ("Time", "time"),
+            ("Mix do time (%)", "team_mix"),
             ("Gasolina Comum (L)", "comum"),
             ("V-Power (L)", "vpower"),
             ("Total de litros (L)", "total"),
             ("Bonificação por litro", "bonus_per_liter"),
             ("Valor estimado", "bonus_total"),
+            ("Estrelas", "stars"),
             ("Relatório atualizado", "update_time"),
         ]
         for row, (label, key) in enumerate(fields):
@@ -1006,7 +1008,9 @@ class BonusCalculator(QtWidgets.QMainWindow):
             self.employees.append(employee_id)
 
             if employee_id not in employee_settings:
-                employee_settings[employee_id] = {"team": "A"}
+                employee_settings[employee_id] = {"team": "A", "stars": 0}
+            else:
+                employee_settings[employee_id].setdefault("stars", 0)
 
             self.mix_history[employee_id] = {
                 "name": display_name,
@@ -1159,11 +1163,13 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.labels["time"].setText(
             emp_team.replace('_NIGHT', ' (Noturno)').replace('OIL', 'Troca de Óleo')
         )
+        self.labels["team_mix"].setText(self.format_brl(team_mix, 2))
         self.labels["comum"].setText(self.format_brl(employee_data['gasolina_comum']))
         self.labels["vpower"].setText(self.format_brl(employee_data['gasolina_vpower']))
         self.labels["total"].setText(self.format_brl(total_quantity))
         self.labels["bonus_per_liter"].setText(self.format_brl_money(bonus_per_liter, decimals=3))
         self.labels["bonus_total"].setText(self.format_brl_money(total_bonus))
+        self.labels["stars"].setText(str(emp_settings.get("stars", 0)))
 
         if self.last_report_update:
             update_time = self.last_report_update.strftime("%d/%m/%Y às %H:%M")
