@@ -4,6 +4,7 @@ import re
 import locale
 import sys
 import datetime
+import copy
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -259,6 +260,396 @@ DEFAULT_CONFIG = {
 }
 
 
+class SettingsPasswordDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Acesso às configurações")
+        self.setModal(True)
+        self.setFixedWidth(360)
+        self.setStyleSheet("background-color: #FFFFFF;")
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+
+        title = QtWidgets.QLabel("Configurações protegidas")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #ED1C24;")
+        title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        subtitle = QtWidgets.QLabel("Digite a senha para acessar as regras e times.")
+        subtitle.setStyleSheet("font-size: 12px; color: #333;")
+        subtitle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
+
+        self.password_input = QtWidgets.QLineEdit()
+        self.password_input.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
+        self.password_input.setPlaceholderText("Senha")
+        self.password_input.setStyleSheet(
+            "padding: 8px; font-size: 14px; border: 2px solid #FFD500; border-radius: 8px;"
+            "color: #111; background-color: #FFFFFF;"
+        )
+
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.addStretch()
+
+        cancel_button = QtWidgets.QPushButton("Cancelar")
+        cancel_button.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 13px; padding: 6px 16px;"
+            "border-radius: 10px;"
+        )
+        cancel_button.clicked.connect(self.reject)
+
+        confirm_button = QtWidgets.QPushButton("Acessar")
+        confirm_button.setStyleSheet(
+            "background-color: #ED1C24; color: white; font-size: 13px; padding: 6px 16px;"
+            "border-radius: 10px;"
+        )
+        confirm_button.clicked.connect(self.accept)
+
+        button_row.addWidget(cancel_button)
+        button_row.addSpacing(10)
+        button_row.addWidget(confirm_button)
+
+        layout.addWidget(title)
+        layout.addSpacing(6)
+        layout.addWidget(subtitle)
+        layout.addSpacing(12)
+        layout.addWidget(self.password_input)
+        layout.addSpacing(12)
+        layout.addLayout(button_row)
+
+        self.password_input.returnPressed.connect(self.accept)
+
+    def password(self):
+        return self.password_input.text().strip()
+
+
+class SettingsDialog(QtWidgets.QDialog):
+    TEAM_OPTIONS = [
+        ("A", "Time A"),
+        ("B", "Time B"),
+        ("A_NIGHT", "Time A (Noturno)"),
+        ("B_NIGHT", "Time B (Noturno)"),
+        ("OIL", "Troca de Óleo"),
+        ("INACTIVE", "Inativo"),
+    ]
+
+    def __init__(self, parent, config, employee_data):
+        super().__init__(parent)
+        self.setWindowTitle("Configurações - Regras e Times")
+        self.setModal(True)
+        self.resize(760, 560)
+        self.setStyleSheet("background-color: #FFFFFF;")
+
+        self.original_config = copy.deepcopy(config)
+        self.employee_data = employee_data
+
+        self.build_ui()
+        self.populate_data()
+
+    def build_ui(self):
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+
+        header = QtWidgets.QLabel("Configurações de Mix e Times")
+        header.setStyleSheet("font-size: 20px; font-weight: 700; color: #ED1C24;")
+        header.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setStyleSheet(
+            "QTabWidget::pane {border: 1px solid #FFD500; border-radius: 8px;}"
+            "QTabBar::tab {padding: 8px 14px; font-size: 13px;}"
+            "QTabBar::tab:selected {background-color: #FFD500; color: #ED1C24;}"
+        )
+
+        self.rules_tab = QtWidgets.QWidget()
+        self.teams_tab = QtWidgets.QWidget()
+        self.tabs.addTab(self.rules_tab, "Regras")
+        self.tabs.addTab(self.teams_tab, "Times")
+
+        self.build_rules_tab()
+        self.build_teams_tab()
+
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.addStretch()
+
+        cancel_button = QtWidgets.QPushButton("Cancelar")
+        cancel_button.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 13px; padding: 6px 18px;"
+            "border-radius: 10px;"
+        )
+        cancel_button.clicked.connect(self.reject)
+
+        save_button = QtWidgets.QPushButton("Salvar")
+        save_button.setStyleSheet(
+            "background-color: #ED1C24; color: white; font-size: 13px; padding: 6px 20px;"
+            "border-radius: 10px;"
+        )
+        save_button.clicked.connect(self.handle_save)
+
+        button_row.addWidget(cancel_button)
+        button_row.addSpacing(10)
+        button_row.addWidget(save_button)
+
+        layout.addWidget(header)
+        layout.addSpacing(12)
+        layout.addWidget(self.tabs)
+        layout.addSpacing(12)
+        layout.addLayout(button_row)
+
+    def build_rules_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.rules_tab)
+
+        rule_type_row = QtWidgets.QHBoxLayout()
+        rule_type_label = QtWidgets.QLabel("Tipo de regra principal:")
+        rule_type_label.setStyleSheet("font-size: 12px; color: #333;")
+
+        self.rule_type_combo = QtWidgets.QComboBox()
+        self.rule_type_combo.addItem("Por time (vencedor x perdedor)", "team")
+        self.rule_type_combo.addItem("Tudo ou nada (mix individual)", "all_or_nothing")
+        self.rule_type_combo.setStyleSheet(
+            "padding: 6px; border: 1px solid #FFD500; border-radius: 6px;"
+        )
+
+        rule_type_row.addWidget(rule_type_label)
+        rule_type_row.addSpacing(10)
+        rule_type_row.addWidget(self.rule_type_combo)
+        rule_type_row.addStretch()
+
+        self.bonus_table = QtWidgets.QTableWidget()
+        self.bonus_table.setColumnCount(3)
+        self.bonus_table.setHorizontalHeaderLabels([
+            "Mix mínimo (%)",
+            "Mix máximo (%)",
+            "Bônus por litro",
+        ])
+        self.bonus_table.horizontalHeader().setStretchLastSection(True)
+        self.bonus_table.verticalHeader().setVisible(False)
+        self.bonus_table.setStyleSheet(
+            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px;}"
+            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600;}"
+        )
+
+        bonus_buttons = QtWidgets.QHBoxLayout()
+        add_bonus = QtWidgets.QPushButton("Adicionar faixa")
+        add_bonus.setStyleSheet(
+            "background-color: #FFD500; color: #ED1C24; font-size: 12px; padding: 4px 12px;"
+            "border-radius: 8px;"
+        )
+        add_bonus.clicked.connect(self.add_bonus_row)
+
+        remove_bonus = QtWidgets.QPushButton("Remover faixa")
+        remove_bonus.setStyleSheet(
+            "background-color: #ED1C24; color: white; font-size: 12px; padding: 4px 12px;"
+            "border-radius: 8px;"
+        )
+        remove_bonus.clicked.connect(self.remove_bonus_row)
+
+        bonus_buttons.addWidget(add_bonus)
+        bonus_buttons.addSpacing(8)
+        bonus_buttons.addWidget(remove_bonus)
+        bonus_buttons.addStretch()
+
+        all_or_nothing_group = QtWidgets.QGroupBox("Regra tudo ou nada")
+        all_or_nothing_group.setStyleSheet(
+            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;}"
+            "QGroupBox::title {subcontrol-origin: margin; left: 10px; padding: 0 4px;}"
+        )
+        all_layout = QtWidgets.QGridLayout(all_or_nothing_group)
+
+        self.min_mix_spin = QtWidgets.QDoubleSpinBox()
+        self.min_mix_spin.setRange(0, 100)
+        self.min_mix_spin.setSuffix(" %")
+        self.min_mix_spin.setDecimals(2)
+
+        self.all_bonus_spin = QtWidgets.QDoubleSpinBox()
+        self.all_bonus_spin.setRange(0, 10)
+        self.all_bonus_spin.setDecimals(4)
+
+        all_layout.addWidget(QtWidgets.QLabel("Mix mínimo:"), 0, 0)
+        all_layout.addWidget(self.min_mix_spin, 0, 1)
+        all_layout.addWidget(QtWidgets.QLabel("Bônus por litro:"), 1, 0)
+        all_layout.addWidget(self.all_bonus_spin, 1, 1)
+
+        team_group = QtWidgets.QGroupBox("Regra por time")
+        team_group.setStyleSheet(
+            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;}"
+            "QGroupBox::title {subcontrol-origin: margin; left: 10px; padding: 0 4px;}"
+        )
+        team_layout = QtWidgets.QGridLayout(team_group)
+
+        self.winner_bonus_spin = QtWidgets.QDoubleSpinBox()
+        self.winner_bonus_spin.setRange(0, 10)
+        self.winner_bonus_spin.setDecimals(4)
+
+        self.loser_bonus_spin = QtWidgets.QDoubleSpinBox()
+        self.loser_bonus_spin.setRange(0, 10)
+        self.loser_bonus_spin.setDecimals(4)
+
+        team_layout.addWidget(QtWidgets.QLabel("Bônus vencedor:"), 0, 0)
+        team_layout.addWidget(self.winner_bonus_spin, 0, 1)
+        team_layout.addWidget(QtWidgets.QLabel("Bônus perdedor:"), 1, 0)
+        team_layout.addWidget(self.loser_bonus_spin, 1, 1)
+
+        layout.addLayout(rule_type_row)
+        layout.addSpacing(10)
+        layout.addWidget(QtWidgets.QLabel("Faixas de bonificação (mix do time):"))
+        layout.addWidget(self.bonus_table)
+        layout.addLayout(bonus_buttons)
+        layout.addSpacing(10)
+        layout.addWidget(all_or_nothing_group)
+        layout.addSpacing(8)
+        layout.addWidget(team_group)
+        layout.addStretch()
+
+    def build_teams_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.teams_tab)
+
+        info = QtWidgets.QLabel(
+            "Defina o time de cada funcionário para o cálculo do mix."
+        )
+        info.setStyleSheet("font-size: 12px; color: #333;")
+
+        self.team_table = QtWidgets.QTableWidget()
+        self.team_table.setColumnCount(2)
+        self.team_table.setHorizontalHeaderLabels(["Funcionário", "Time"])
+        self.team_table.horizontalHeader().setStretchLastSection(True)
+        self.team_table.verticalHeader().setVisible(False)
+        self.team_table.setStyleSheet(
+            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px;}"
+            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600;}"
+        )
+
+        layout.addWidget(info)
+        layout.addSpacing(8)
+        layout.addWidget(self.team_table)
+        layout.addStretch()
+
+    def populate_data(self):
+        bonus_rules = self.original_config.get("bonus_rules", [])
+        self.bonus_table.setRowCount(len(bonus_rules))
+        for row, rule in enumerate(bonus_rules):
+            self.set_bonus_row(row, rule.get("min", 0), rule.get("max", 0), rule.get("value", 0))
+
+        mix_rule_type = self.original_config.get("mix_rule_type", "team")
+        index = self.rule_type_combo.findData(mix_rule_type)
+        if index >= 0:
+            self.rule_type_combo.setCurrentIndex(index)
+
+        mix_rules = self.original_config.get("mix_rules", {})
+        all_or_nothing = mix_rules.get("all_or_nothing", {})
+        team_rules = mix_rules.get("team", {})
+
+        self.min_mix_spin.setValue(all_or_nothing.get("min_mix", 40.0))
+        self.all_bonus_spin.setValue(all_or_nothing.get("bonus_per_liter", 0.02))
+        self.winner_bonus_spin.setValue(team_rules.get("winner_bonus_per_liter", 0.0225))
+        self.loser_bonus_spin.setValue(team_rules.get("loser_bonus_per_liter", 0.02))
+
+        employee_settings = self.original_config.get("employee_settings", {})
+        employees = sorted(
+            self.employee_data.values(),
+            key=lambda e: e.get("display_name", "")
+        )
+
+        self.team_table.setRowCount(len(employees))
+        for row, employee in enumerate(employees):
+            display_name = employee.get("display_name", "")
+            emp_id = employee.get("id")
+            team_value = employee_settings.get(emp_id, {}).get("team", "A")
+
+            name_item = QtWidgets.QTableWidgetItem(display_name)
+            name_item.setFlags(name_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+            self.team_table.setItem(row, 0, name_item)
+
+            combo = QtWidgets.QComboBox()
+            for value, label in self.TEAM_OPTIONS:
+                combo.addItem(label, value)
+            idx = combo.findData(team_value)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            self.team_table.setCellWidget(row, 1, combo)
+
+    def set_bonus_row(self, row, min_value, max_value, bonus_value):
+        min_spin = QtWidgets.QDoubleSpinBox()
+        min_spin.setRange(0, 100)
+        min_spin.setDecimals(2)
+        min_spin.setValue(min_value)
+
+        max_spin = QtWidgets.QDoubleSpinBox()
+        max_spin.setRange(0, 100)
+        max_spin.setDecimals(2)
+        max_spin.setValue(max_value)
+
+        bonus_spin = QtWidgets.QDoubleSpinBox()
+        bonus_spin.setRange(0, 10)
+        bonus_spin.setDecimals(4)
+        bonus_spin.setValue(bonus_value)
+
+        self.bonus_table.setCellWidget(row, 0, min_spin)
+        self.bonus_table.setCellWidget(row, 1, max_spin)
+        self.bonus_table.setCellWidget(row, 2, bonus_spin)
+
+    def add_bonus_row(self):
+        row = self.bonus_table.rowCount()
+        self.bonus_table.insertRow(row)
+        self.set_bonus_row(row, 0, 0, 0)
+
+    def remove_bonus_row(self):
+        row = self.bonus_table.currentRow()
+        if row >= 0:
+            self.bonus_table.removeRow(row)
+
+    def handle_save(self):
+        bonus_rules = []
+        for row in range(self.bonus_table.rowCount()):
+            min_spin = self.bonus_table.cellWidget(row, 0)
+            max_spin = self.bonus_table.cellWidget(row, 1)
+            bonus_spin = self.bonus_table.cellWidget(row, 2)
+            min_value = min_spin.value()
+            max_value = max_spin.value()
+            if min_value > max_value:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Faixa inválida",
+                    "O mix mínimo não pode ser maior que o mix máximo."
+                )
+                return
+            bonus_rules.append({
+                "min": min_value,
+                "max": max_value,
+                "value": bonus_spin.value()
+            })
+
+        employee_settings = copy.deepcopy(self.original_config.get("employee_settings", {}))
+        for row in range(self.team_table.rowCount()):
+            name_item = self.team_table.item(row, 0)
+            combo = self.team_table.cellWidget(row, 1)
+            if not name_item or not combo:
+                continue
+            display_name = name_item.text()
+            emp_id = display_name.split(" - ")[0].strip()
+            employee_settings.setdefault(emp_id, {})
+            employee_settings[emp_id]["team"] = combo.currentData()
+
+        self.original_config["bonus_rules"] = bonus_rules
+        self.original_config["mix_rule_type"] = self.rule_type_combo.currentData()
+        self.original_config["mix_rules"] = {
+            "all_or_nothing": {
+                "min_mix": self.min_mix_spin.value(),
+                "bonus_per_liter": self.all_bonus_spin.value(),
+            },
+            "team": {
+                "winner_bonus_per_liter": self.winner_bonus_spin.value(),
+                "loser_bonus_per_liter": self.loser_bonus_spin.value(),
+            },
+        }
+        self.original_config["employee_settings"] = employee_settings
+
+        self.accept()
+
+    def get_config(self):
+        return self.original_config
+
+
 class BonusCalculator(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -372,7 +763,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
-        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(10, 10, 10, 10)
 
         logo = QtWidgets.QLabel()
         pixmap = QtGui.QPixmap("Logo_Vpower.png")
@@ -434,15 +825,20 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.status_label.setStyleSheet("font-size: 12px; color: #ED1C24;")
 
-        layout.addWidget(title)
-        layout.addSpacing(20)
-        layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(20)
-        layout.addWidget(logo)
-        layout.addSpacing(20)
-        layout.addLayout(button_row)
-        layout.addSpacing(10)
-        layout.addWidget(self.status_label)
+        center_layout = QtWidgets.QVBoxLayout()
+        center_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.addWidget(title)
+        center_layout.addSpacing(16)
+        center_layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.addSpacing(16)
+        center_layout.addWidget(logo)
+        center_layout.addSpacing(16)
+        center_layout.addLayout(button_row)
+        center_layout.addSpacing(8)
+        center_layout.addWidget(self.status_label)
+
+        layout.addStretch()
+        layout.addLayout(center_layout)
         layout.addStretch()
         layout.addWidget(
             settings_button,
@@ -702,15 +1098,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
         mix_a = calc_team_mix(teams['A'])
         mix_b = calc_team_mix(teams['B'])
 
-        winner = None
-        loser = None
-        if mix_a > mix_b:
-            winner = 'A'
-            loser = 'B'
-        elif mix_b > mix_a:
-            winner = 'B'
-            loser = 'A'
-
         total_quantity = employee_data['total_quantity']
         premium_quantity = employee_data['gasolina_vpower']
         mix_percentage = (premium_quantity / total_quantity * 100) if total_quantity > 0 else 0.0
@@ -718,26 +1105,15 @@ class BonusCalculator(QtWidgets.QMainWindow):
         team_mix = mix_a if emp_team.startswith('A') else mix_b
 
         is_night = emp_team in ("A_NIGHT", "B_NIGHT")
-        is_winner = (winner is not None and emp_team.startswith(winner))
-        is_loser = (loser is not None and emp_team.startswith(loser))
-
         mix_rule_type = self.config.get("mix_rule_type", "team")
         mix_rules = self.config.get("mix_rules", {})
         all_or_nothing = mix_rules.get("all_or_nothing", {})
-        team_rules = mix_rules.get("team", {})
 
         if mix_rule_type == "all_or_nothing":
             min_mix = all_or_nothing.get("min_mix", 40.0)
             bonus_per_liter = all_or_nothing.get("bonus_per_liter", 0.0) if mix_percentage >= min_mix else 0.0
         else:
-            winner_bonus = team_rules.get("winner_bonus_per_liter", 0.0)
-            loser_bonus = team_rules.get("loser_bonus_per_liter", 0.0)
-            if is_winner:
-                bonus_per_liter = winner_bonus
-            elif is_loser:
-                bonus_per_liter = loser_bonus
-            else:
-                bonus_per_liter = loser_bonus if winner is None else 0.0
+            bonus_per_liter = self.get_bonus_from_ranges(team_mix)
 
         if is_night:
             bonus_per_liter *= 0.7
@@ -788,7 +1164,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         rule_label = (
             "Tudo ou nada (mix individual)" if mix_rule_type == "all_or_nothing"
-            else "Por time (vencedor x perdedor)"
+            else "Faixas por time"
         )
         tooltip = (
             f"Mix do time: {self.format_brl(team_mix, 2)}%\n"
@@ -796,6 +1172,15 @@ class BonusCalculator(QtWidgets.QMainWindow):
             f"Regra aplicada: {rule_label}"
         )
         self.mix_label.setToolTip(tooltip)
+
+    def get_bonus_from_ranges(self, mix_percentage):
+        bonus_rules = self.config.get("bonus_rules", [])
+        for rule in bonus_rules:
+            min_value = rule.get("min", 0)
+            max_value = rule.get("max", 0)
+            if min_value <= mix_percentage <= max_value:
+                return rule.get("value", 0.0)
+        return 0.0
 
     def get_mix_comparison(self, employee_data):
         previous_mix = employee_data.get("previous_mix")
@@ -834,30 +1219,22 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.load_report()
 
     def open_settings(self):
-        self.save_config()
-        config_path = os.path.abspath(self.config_file)
+        password_dialog = SettingsPasswordDialog(self)
+        if password_dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
 
-        message = QtWidgets.QMessageBox(self)
-        message.setWindowTitle("Configurações")
-        message.setIcon(QtWidgets.QMessageBox.Icon.Information)
-        message.setText(
-            "As configurações são salvas no arquivo config.json.\n"
-            "Clique em “Abrir config” para editar manualmente."
-        )
-        open_button = message.addButton("Abrir config", QtWidgets.QMessageBox.ButtonRole.ActionRole)
-        message.addButton("Fechar", QtWidgets.QMessageBox.ButtonRole.RejectRole)
-        message.exec()
-
-        if message.clickedButton() == open_button:
-            opened = QtGui.QDesktopServices.openUrl(
-                QtCore.QUrl.fromLocalFile(config_path)
+        if password_dialog.password() != "Zam1234@":
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Senha incorreta",
+                "A senha informada está incorreta."
             )
-            if not opened:
-                QtWidgets.QMessageBox.warning(
-                    self,
-                    "Não foi possível abrir",
-                    f"Não foi possível abrir o arquivo:\n{config_path}"
-                )
+            return
+
+        dialog = SettingsDialog(self, self.config, self.employee_data)
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            self.config = dialog.get_config()
+            self.save_config()
 
     @staticmethod
     def format_brl(value, decimals=3):
