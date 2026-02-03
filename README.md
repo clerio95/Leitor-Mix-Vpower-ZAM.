@@ -133,9 +133,9 @@ As regras são configuráveis via interface admin:
 
 ### 🔧 **Dependências Principais**
 ```
-pillow==10.2.0          # Processamento de imagens
-pyinstaller==6.3.0      # Geração de executáveis
-customtkinter==5.2.2    # Interface moderna (opcional)
+Pillow==11.0.0          # Processamento de imagens
+PySide6==6.10.2         # Interface gráfica
+pyinstaller==6.11.1     # Geração de executáveis
 ```
 
 ### 🧪 **Testando**
