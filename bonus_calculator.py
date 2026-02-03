@@ -763,7 +763,8 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(20, 50, 20, 20)
+        layout.setSpacing(6)
 
         logo = QtWidgets.QLabel()
         pixmap = QtGui.QPixmap("Logo_Vpower.png")
@@ -827,14 +828,15 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         center_layout = QtWidgets.QVBoxLayout()
         center_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.setSpacing(8)
         center_layout.addWidget(title)
-        center_layout.addSpacing(16)
-        center_layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        center_layout.addSpacing(16)
-        center_layout.addWidget(logo)
-        center_layout.addSpacing(16)
-        center_layout.addLayout(button_row)
         center_layout.addSpacing(8)
+        center_layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.addSpacing(8)
+        center_layout.addWidget(logo)
+        center_layout.addSpacing(8)
+        center_layout.addLayout(button_row)
+        center_layout.addSpacing(4)
         center_layout.addWidget(self.status_label)
 
         layout.addStretch()
@@ -1130,19 +1132,8 @@ class BonusCalculator(QtWidgets.QMainWindow):
             if diurnos else 0.0
         )
 
-        comparison = self.get_mix_comparison(employee_data)
         mix_text = f"Mix: {self.format_brl(mix_percentage, 2)}%"
         mix_style = "font-size: 40px; font-weight: 800; color: #ED1C24;"
-        if comparison:
-            if comparison["status"] == "up":
-                mix_text += f" ↗️ (+{self.format_brl(comparison['difference'], 2)}%)"
-                mix_style = "font-size: 40px; font-weight: 800; color: #228B22;"
-            elif comparison["status"] == "down":
-                mix_text += f" ↘️ (-{self.format_brl(comparison['difference'], 2)}%)"
-                mix_style = "font-size: 40px; font-weight: 800; color: #DC143C;"
-            else:
-                mix_text += " ➡️"
-                mix_style = "font-size: 40px; font-weight: 800; color: #4169E1;"
         self.employee_name_label.setText(employee_data['display_name'])
         self.mix_label.setText(mix_text)
         self.mix_label.setStyleSheet(mix_style)
@@ -1181,25 +1172,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
             if min_value <= mix_percentage <= max_value:
                 return rule.get("value", 0.0)
         return 0.0
-
-    def get_mix_comparison(self, employee_data):
-        previous_mix = employee_data.get("previous_mix")
-        if previous_mix is None:
-            return None
-
-        current_mix = employee_data.get("mix", 0.0)
-        difference = current_mix - previous_mix
-        if abs(difference) < 0.01:
-            status = "same"
-        elif difference > 0:
-            status = "up"
-        else:
-            status = "down"
-
-        return {
-            "status": status,
-            "difference": abs(difference)
-        }
 
     def add_to_search_history(self, employee_code, employee_name):
         history_entry = {
