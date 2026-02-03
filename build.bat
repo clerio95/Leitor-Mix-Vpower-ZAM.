@@ -12,6 +12,14 @@ ECHO.
 
 REM Instala dependências
 ECHO Instalando dependências...
+python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor<=12) else 1)"
+if errorlevel 1 (
+    ECHO Erro: Python 3.12 ou inferior é necessário para PySide6.
+    ECHO Versão detectada: 
+    python --version
+    PAUSE
+    exit /b 1
+)
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 if errorlevel 1 (
@@ -42,21 +50,14 @@ copy "README.md" "dist\Mix V-Power\"
 copy "Leia-me.txt" "dist\Mix V-Power\"
 ECHO.
 
-REM Cria arquivo ZIP
-ECHO Criando arquivo ZIP...
-if exist "dist\Mix-V-Power-Completo.zip" del /f /q "dist\Mix-V-Power-Completo.zip"
-powershell -command "Compress-Archive -Path 'dist\Mix V-Power\*' -DestinationPath 'dist\Mix-V-Power-Completo.zip' -Force"
-ECHO.
-
 REM Mensagem final
 ECHO ========================================
 ECHO Build concluído com sucesso!
 ECHO.
 ECHO Arquivos gerados:
 ECHO - dist\Mix V-Power\Mix V-Power.exe
-ECHO - dist\Mix-V-Power-Completo.zip
 ECHO.
-ECHO O arquivo ZIP contém tudo necessário
+ECHO A pasta de distribuição contém tudo necessário
 ECHO para executar o programa em outro PC.
 ECHO ========================================
 PAUSE 
