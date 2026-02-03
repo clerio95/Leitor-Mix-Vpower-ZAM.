@@ -763,7 +763,8 @@ class BonusCalculator(QtWidgets.QMainWindow):
     def build_login_page(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
-        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(20, 50, 20, 20)
+        layout.setSpacing(6)
 
         logo = QtWidgets.QLabel()
         pixmap = QtGui.QPixmap("Logo_Vpower.png")
@@ -825,15 +826,21 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.status_label.setStyleSheet("font-size: 12px; color: #ED1C24;")
 
-        layout.addWidget(title)
-        layout.addSpacing(20)
-        layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(20)
-        layout.addWidget(logo)
-        layout.addSpacing(20)
-        layout.addLayout(button_row)
-        layout.addSpacing(10)
-        layout.addWidget(self.status_label)
+        center_layout = QtWidgets.QVBoxLayout()
+        center_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.setSpacing(8)
+        center_layout.addWidget(title)
+        center_layout.addSpacing(8)
+        center_layout.addWidget(self.code_input, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        center_layout.addSpacing(8)
+        center_layout.addWidget(logo)
+        center_layout.addSpacing(8)
+        center_layout.addLayout(button_row)
+        center_layout.addSpacing(4)
+        center_layout.addWidget(self.status_label)
+
+        layout.addStretch()
+        layout.addLayout(center_layout)
         layout.addStretch()
         layout.addWidget(
             settings_button,
@@ -1093,15 +1100,6 @@ class BonusCalculator(QtWidgets.QMainWindow):
         mix_a = calc_team_mix(teams['A'])
         mix_b = calc_team_mix(teams['B'])
 
-        winner = None
-        loser = None
-        if mix_a > mix_b:
-            winner = 'A'
-            loser = 'B'
-        elif mix_b > mix_a:
-            winner = 'B'
-            loser = 'A'
-
         total_quantity = employee_data['total_quantity']
         premium_quantity = employee_data['gasolina_vpower']
         mix_percentage = (premium_quantity / total_quantity * 100) if total_quantity > 0 else 0.0
@@ -1109,26 +1107,15 @@ class BonusCalculator(QtWidgets.QMainWindow):
         team_mix = mix_a if emp_team.startswith('A') else mix_b
 
         is_night = emp_team in ("A_NIGHT", "B_NIGHT")
-        is_winner = (winner is not None and emp_team.startswith(winner))
-        is_loser = (loser is not None and emp_team.startswith(loser))
-
         mix_rule_type = self.config.get("mix_rule_type", "team")
         mix_rules = self.config.get("mix_rules", {})
         all_or_nothing = mix_rules.get("all_or_nothing", {})
-        team_rules = mix_rules.get("team", {})
 
         if mix_rule_type == "all_or_nothing":
             min_mix = all_or_nothing.get("min_mix", 40.0)
             bonus_per_liter = all_or_nothing.get("bonus_per_liter", 0.0) if mix_percentage >= min_mix else 0.0
         else:
-            winner_bonus = team_rules.get("winner_bonus_per_liter", 0.0)
-            loser_bonus = team_rules.get("loser_bonus_per_liter", 0.0)
-            if is_winner:
-                bonus_per_liter = winner_bonus
-            elif is_loser:
-                bonus_per_liter = loser_bonus
-            else:
-                bonus_per_liter = loser_bonus if winner is None else 0.0
+            bonus_per_liter = self.get_bonus_from_ranges(team_mix)
 
         if is_night:
             bonus_per_liter *= 0.7
@@ -1145,19 +1132,8 @@ class BonusCalculator(QtWidgets.QMainWindow):
             if diurnos else 0.0
         )
 
-        comparison = self.get_mix_comparison(employee_data)
         mix_text = f"Mix: {self.format_brl(mix_percentage, 2)}%"
         mix_style = "font-size: 40px; font-weight: 800; color: #ED1C24;"
-        if comparison:
-            if comparison["status"] == "up":
-                mix_text += f" ↗️ (+{self.format_brl(comparison['difference'], 2)}%)"
-                mix_style = "font-size: 40px; font-weight: 800; color: #228B22;"
-            elif comparison["status"] == "down":
-                mix_text += f" ↘️ (-{self.format_brl(comparison['difference'], 2)}%)"
-                mix_style = "font-size: 40px; font-weight: 800; color: #DC143C;"
-            else:
-                mix_text += " ➡️"
-                mix_style = "font-size: 40px; font-weight: 800; color: #4169E1;"
         self.employee_name_label.setText(employee_data['display_name'])
         self.mix_label.setText(mix_text)
         self.mix_label.setStyleSheet(mix_style)
@@ -1179,7 +1155,7 @@ class BonusCalculator(QtWidgets.QMainWindow):
 
         rule_label = (
             "Tudo ou nada (mix individual)" if mix_rule_type == "all_or_nothing"
-            else "Por time (vencedor x perdedor)"
+            else "Faixas por time"
         )
         tooltip = (
             f"Mix do time: {self.format_brl(team_mix, 2)}%\n"
@@ -1188,24 +1164,14 @@ class BonusCalculator(QtWidgets.QMainWindow):
         )
         self.mix_label.setToolTip(tooltip)
 
-    def get_mix_comparison(self, employee_data):
-        previous_mix = employee_data.get("previous_mix")
-        if previous_mix is None:
-            return None
-
-        current_mix = employee_data.get("mix", 0.0)
-        difference = current_mix - previous_mix
-        if abs(difference) < 0.01:
-            status = "same"
-        elif difference > 0:
-            status = "up"
-        else:
-            status = "down"
-
-        return {
-            "status": status,
-            "difference": abs(difference)
-        }
+    def get_bonus_from_ranges(self, mix_percentage):
+        bonus_rules = self.config.get("bonus_rules", [])
+        for rule in bonus_rules:
+            min_value = rule.get("min", 0)
+            max_value = rule.get("max", 0)
+            if min_value <= mix_percentage <= max_value:
+                return rule.get("value", 0.0)
+        return 0.0
 
     def add_to_search_history(self, employee_code, employee_name):
         history_entry = {
