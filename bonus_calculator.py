@@ -492,7 +492,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         layout.addLayout(rule_type_row)
         layout.addSpacing(10)
-        layout.addWidget(QtWidgets.QLabel("Faixas de bonificação (mix do time):"))
+        layout.addWidget(QtWidgets.QLabel("Faixas de bonificação (mix individual):"))
         layout.addWidget(self.bonus_table)
         layout.addLayout(bonus_buttons)
         layout.addSpacing(10)
