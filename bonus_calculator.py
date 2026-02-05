@@ -526,12 +526,14 @@ class SettingsDialog(QtWidgets.QDialog):
 
         info = QtWidgets.QLabel(
             "Defina a pontuação em estrelas (1 estrela = 1 ponto)."
+            "Defina manualmente o número de estrelas de cada funcionário."
         )
         info.setStyleSheet("font-size: 12px; color: #333;")
 
         self.stars_table = QtWidgets.QTableWidget()
         self.stars_table.setColumnCount(2)
         self.stars_table.setHorizontalHeaderLabels(["Funcionário", "Estrelas (pontos)"])
+        self.stars_table.setHorizontalHeaderLabels(["Funcionário", "Estrelas"])
         self.stars_table.horizontalHeader().setStretchLastSection(True)
         self.stars_table.verticalHeader().setVisible(False)
         self.stars_table.setStyleSheet(
@@ -602,6 +604,14 @@ class SettingsDialog(QtWidgets.QDialog):
             stars_input.setToolTip("Pontuação em estrelas (1 estrela = 1 ponto).")
             stars_input.setStyleSheet(self.line_edit_style())
             self.stars_table.setCellWidget(row, 1, stars_input)
+            stars_spin = QtWidgets.QSpinBox()
+            stars_spin.setRange(0, 100000)
+            stars_spin.setValue(stars_value)
+            stars_spin.setToolTip("Pontuação em estrelas (1 estrela = 1 ponto).")
+            stars_spin.setRange(0, 5)
+            stars_spin.setValue(stars_value)
+            stars_spin.setStyleSheet(self.spinbox_style())
+            self.stars_table.setCellWidget(row, 1, stars_spin)
 
     def set_bonus_row(self, row, min_value, max_value, bonus_value):
         min_spin = QtWidgets.QDoubleSpinBox()
@@ -672,6 +682,8 @@ class SettingsDialog(QtWidgets.QDialog):
             name_item = self.stars_table.item(row, 0)
             stars_input = self.stars_table.cellWidget(row, 1)
             if not name_item or not stars_input:
+            spin = self.stars_table.cellWidget(row, 1)
+            if not name_item or not spin:
                 continue
             display_name = name_item.text()
             emp_id = display_name.split(" - ")[0].strip()
@@ -681,6 +693,7 @@ class SettingsDialog(QtWidgets.QDialog):
             except ValueError:
                 stars_value = 0
             employee_settings[emp_id]["stars"] = stars_value
+            employee_settings[emp_id]["stars"] = int(spin.value())
 
         self.original_config["bonus_rules"] = bonus_rules
         self.original_config["mix_rule_type"] = self.rule_type_combo.currentData()
