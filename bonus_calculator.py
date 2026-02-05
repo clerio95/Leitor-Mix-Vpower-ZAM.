@@ -343,8 +343,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setStyleSheet(
             "QTabWidget::pane {border: 1px solid #FFD500; border-radius: 8px;}"
-            "QTabBar::tab {padding: 8px 14px; font-size: 13px;}"
+            "QTabBar::tab {padding: 8px 14px; font-size: 13px; color: #333; background-color: #FFFFFF;}"
             "QTabBar::tab:selected {background-color: #FFD500; color: #ED1C24;}"
+            "QTabBar::tab:!selected {background-color: #FFF4B5;}"
         )
 
         self.rules_tab = QtWidgets.QWidget()
@@ -954,36 +955,54 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.mix_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.mix_label.setStyleSheet("font-size: 40px; font-weight: 800; color: #ED1C24;")
 
-        self.info_grid = QtWidgets.QGridLayout()
-        self.info_grid.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.info_grid.setHorizontalSpacing(20)
-        self.info_grid.setVerticalSpacing(10)
-
         self.labels = {}
-        fields = [
-            ("Time", "time"),
-            ("Mix do time (%)", "team_mix"),
-            ("Gasolina Comum (L)", "comum"),
-            ("V-Power (L)", "vpower"),
-            ("Total de litros (L)", "total"),
-            ("Bonificação por litro", "bonus_per_liter"),
-            ("Valor estimado", "bonus_total"),
-            ("Estrelas", "stars"),
-            ("Relatório atualizado", "update_time"),
+
+        info_container = QtWidgets.QFrame()
+        info_container.setStyleSheet(
+            "QFrame {background-color: #FFFDF4; border: 1px solid #FFD500; border-radius: 12px;}"
+        )
+        info_layout = QtWidgets.QVBoxLayout(info_container)
+        info_layout.setContentsMargins(18, 16, 18, 16)
+        info_layout.setSpacing(14)
+
+        sections = [
+            ("🏁 Resumo do time", [("Time", "time"), ("Mix do time (%)", "team_mix")]),
+            ("⛽ Litros vendidos", [("Gasolina Comum (L)", "comum"), ("V-Power (L)", "vpower"), ("Total de litros (L)", "total")]),
+            ("💰 Bonificação", [("Bonificação por litro", "bonus_per_liter"), ("Valor estimado", "bonus_total")]),
+            ("⭐ Destaques", [("Estrelas", "stars"), ("Relatório atualizado", "update_time")]),
         ]
-        for row, (label, key) in enumerate(fields):
-            name_label = QtWidgets.QLabel(label + ":")
-            name_label.setStyleSheet("font-size: 14px; color: #333;")
-            value_label = QtWidgets.QLabel("-")
-            value_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #111;")
-            self.labels[key] = value_label
-            self.info_grid.addWidget(name_label, row, 0)
-            self.info_grid.addWidget(value_label, row, 1)
+
+        for title, fields in sections:
+            section_frame = QtWidgets.QFrame()
+            section_frame.setStyleSheet(
+                "QFrame {background-color: #FFFFFF; border: 1px solid #FFE17A; border-radius: 10px;}"
+            )
+            section_layout = QtWidgets.QVBoxLayout(section_frame)
+            section_layout.setContentsMargins(14, 10, 14, 10)
+            section_layout.setSpacing(6)
+
+            section_title = QtWidgets.QLabel(title)
+            section_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #ED1C24;")
+            section_layout.addWidget(section_title)
+
+            for label, key in fields:
+                row = QtWidgets.QHBoxLayout()
+                name_label = QtWidgets.QLabel(label + ":")
+                name_label.setStyleSheet("font-size: 13px; color: #444;")
+                value_label = QtWidgets.QLabel("-")
+                value_label.setStyleSheet("font-size: 15px; font-weight: 700; color: #111;")
+                row.addWidget(name_label)
+                row.addStretch()
+                row.addWidget(value_label)
+                section_layout.addLayout(row)
+                self.labels[key] = value_label
+
+            info_layout.addWidget(section_frame)
 
         layout.addWidget(self.employee_name_label)
         layout.addWidget(self.mix_label)
         layout.addSpacing(20)
-        layout.addLayout(self.info_grid)
+        layout.addWidget(info_container)
         layout.addStretch()
 
         back_button = QtWidgets.QPushButton("Voltar")
