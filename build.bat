@@ -66,6 +66,15 @@ if errorlevel 1 (
 call "%VENV_DIR%\Scripts\activate"
 if errorlevel 1 (
     ECHO Erro ao ativar o ambiente virtual.
+if errorlevel 1 (
+    ECHO Erro ao criar o ambiente virtual.
+    PAUSE
+    exit /b 1
+)
+
+call "%VENV_DIR%\Scripts\activate"
+if errorlevel 1 (
+    ECHO Erro ao ativar o ambiente virtual.
     PAUSE
     exit /b 1
 )

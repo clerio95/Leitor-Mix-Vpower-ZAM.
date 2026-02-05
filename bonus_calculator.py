@@ -598,6 +598,12 @@ class SettingsDialog(QtWidgets.QDialog):
             stars_name_item.setFlags(stars_name_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
             self.stars_table.setItem(row, 0, stars_name_item)
 
+            stars_input = QtWidgets.QLineEdit()
+            stars_input.setValidator(QtGui.QIntValidator(0, 1000000, stars_input))
+            stars_input.setText(str(stars_value))
+            stars_input.setToolTip("Pontuação em estrelas (1 estrela = 1 ponto).")
+            stars_input.setStyleSheet(self.line_edit_style())
+            self.stars_table.setCellWidget(row, 1, stars_input)
             stars_spin = QtWidgets.QSpinBox()
             stars_spin.setRange(0, 100000)
             stars_spin.setValue(stars_value)
@@ -674,12 +680,19 @@ class SettingsDialog(QtWidgets.QDialog):
 
         for row in range(self.stars_table.rowCount()):
             name_item = self.stars_table.item(row, 0)
+            stars_input = self.stars_table.cellWidget(row, 1)
+            if not name_item or not stars_input:
             spin = self.stars_table.cellWidget(row, 1)
             if not name_item or not spin:
                 continue
             display_name = name_item.text()
             emp_id = display_name.split(" - ")[0].strip()
             employee_settings.setdefault(emp_id, {})
+            try:
+                stars_value = int(stars_input.text() or 0)
+            except ValueError:
+                stars_value = 0
+            employee_settings[emp_id]["stars"] = stars_value
             employee_settings[emp_id]["stars"] = int(spin.value())
 
         self.original_config["bonus_rules"] = bonus_rules
@@ -712,6 +725,13 @@ class SettingsDialog(QtWidgets.QDialog):
     def combo_style():
         return (
             "QComboBox {padding: 4px; border: 1px solid #FFD500; border-radius: 6px;"
+            "color: #111; background-color: #FFFFFF;}"
+        )
+
+    @staticmethod
+    def line_edit_style():
+        return (
+            "QLineEdit {padding: 4px; border: 1px solid #FFD500; border-radius: 6px;"
             "color: #111; background-color: #FFFFFF;}"
         )
 
