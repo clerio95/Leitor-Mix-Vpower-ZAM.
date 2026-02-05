@@ -597,7 +597,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self.stars_table.setItem(row, 0, stars_name_item)
 
             stars_spin = QtWidgets.QSpinBox()
-            stars_spin.setRange(0, 999)
+            stars_spin.setRange(0, 5)
             stars_spin.setValue(stars_value)
             stars_spin.setStyleSheet(self.spinbox_style())
             self.stars_table.setCellWidget(row, 1, stars_spin)
