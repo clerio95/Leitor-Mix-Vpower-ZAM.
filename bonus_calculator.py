@@ -343,17 +343,21 @@ class SettingsDialog(QtWidgets.QDialog):
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setStyleSheet(
             "QTabWidget::pane {border: 1px solid #FFD500; border-radius: 8px;}"
-            "QTabBar::tab {padding: 8px 14px; font-size: 13px;}"
+            "QTabBar::tab {padding: 8px 14px; font-size: 13px; color: #333; background-color: #FFFFFF;}"
             "QTabBar::tab:selected {background-color: #FFD500; color: #ED1C24;}"
+            "QTabBar::tab:!selected {background-color: #FFF4B5;}"
         )
 
         self.rules_tab = QtWidgets.QWidget()
         self.teams_tab = QtWidgets.QWidget()
+        self.stars_tab = QtWidgets.QWidget()
         self.tabs.addTab(self.rules_tab, "Regras")
         self.tabs.addTab(self.teams_tab, "Times")
+        self.tabs.addTab(self.stars_tab, "Estrelas")
 
         self.build_rules_tab()
         self.build_teams_tab()
+        self.build_stars_tab()
 
         button_row = QtWidgets.QHBoxLayout()
         button_row.addStretch()
@@ -394,6 +398,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.rule_type_combo.addItem("Tudo ou nada (mix individual)", "all_or_nothing")
         self.rule_type_combo.setStyleSheet(
             "padding: 6px; border: 1px solid #FFD500; border-radius: 6px;"
+            "color: #111; background-color: #FFFFFF;"
         )
 
         rule_type_row.addWidget(rule_type_label)
@@ -411,8 +416,8 @@ class SettingsDialog(QtWidgets.QDialog):
         self.bonus_table.horizontalHeader().setStretchLastSection(True)
         self.bonus_table.verticalHeader().setVisible(False)
         self.bonus_table.setStyleSheet(
-            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px;}"
-            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600;}"
+            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px; color: #111;}"
+            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600; color: #333;}"
         )
 
         bonus_buttons = QtWidgets.QHBoxLayout()
@@ -437,7 +442,8 @@ class SettingsDialog(QtWidgets.QDialog):
 
         all_or_nothing_group = QtWidgets.QGroupBox("Regra tudo ou nada")
         all_or_nothing_group.setStyleSheet(
-            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;}"
+            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;"
+            "color: #333;}"
             "QGroupBox::title {subcontrol-origin: margin; left: 10px; padding: 0 4px;}"
         )
         all_layout = QtWidgets.QGridLayout(all_or_nothing_group)
@@ -446,10 +452,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.min_mix_spin.setRange(0, 100)
         self.min_mix_spin.setSuffix(" %")
         self.min_mix_spin.setDecimals(2)
+        self.min_mix_spin.setStyleSheet(self.spinbox_style())
 
         self.all_bonus_spin = QtWidgets.QDoubleSpinBox()
         self.all_bonus_spin.setRange(0, 10)
         self.all_bonus_spin.setDecimals(4)
+        self.all_bonus_spin.setStyleSheet(self.spinbox_style())
 
         all_layout.addWidget(QtWidgets.QLabel("Mix mínimo:"), 0, 0)
         all_layout.addWidget(self.min_mix_spin, 0, 1)
@@ -458,7 +466,8 @@ class SettingsDialog(QtWidgets.QDialog):
 
         team_group = QtWidgets.QGroupBox("Regra por time")
         team_group.setStyleSheet(
-            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;}"
+            "QGroupBox {font-weight: 600; border: 1px solid #FFD500; border-radius: 8px; padding: 8px;"
+            "color: #333;}"
             "QGroupBox::title {subcontrol-origin: margin; left: 10px; padding: 0 4px;}"
         )
         team_layout = QtWidgets.QGridLayout(team_group)
@@ -466,10 +475,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.winner_bonus_spin = QtWidgets.QDoubleSpinBox()
         self.winner_bonus_spin.setRange(0, 10)
         self.winner_bonus_spin.setDecimals(4)
+        self.winner_bonus_spin.setStyleSheet(self.spinbox_style())
 
         self.loser_bonus_spin = QtWidgets.QDoubleSpinBox()
         self.loser_bonus_spin.setRange(0, 10)
         self.loser_bonus_spin.setDecimals(4)
+        self.loser_bonus_spin.setStyleSheet(self.spinbox_style())
 
         team_layout.addWidget(QtWidgets.QLabel("Bônus vencedor:"), 0, 0)
         team_layout.addWidget(self.winner_bonus_spin, 0, 1)
@@ -501,13 +512,36 @@ class SettingsDialog(QtWidgets.QDialog):
         self.team_table.horizontalHeader().setStretchLastSection(True)
         self.team_table.verticalHeader().setVisible(False)
         self.team_table.setStyleSheet(
-            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px;}"
-            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600;}"
+            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px; color: #111;}"
+            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600; color: #333;}"
         )
 
         layout.addWidget(info)
         layout.addSpacing(8)
         layout.addWidget(self.team_table)
+        layout.addStretch()
+
+    def build_stars_tab(self):
+        layout = QtWidgets.QVBoxLayout(self.stars_tab)
+
+        info = QtWidgets.QLabel(
+            "Defina a pontuação em estrelas (1 estrela = 1 ponto)."
+        )
+        info.setStyleSheet("font-size: 12px; color: #333;")
+
+        self.stars_table = QtWidgets.QTableWidget()
+        self.stars_table.setColumnCount(2)
+        self.stars_table.setHorizontalHeaderLabels(["Funcionário", "Estrelas (pontos)"])
+        self.stars_table.horizontalHeader().setStretchLastSection(True)
+        self.stars_table.verticalHeader().setVisible(False)
+        self.stars_table.setStyleSheet(
+            "QTableWidget {border: 1px solid #FFD500; border-radius: 8px; color: #111;}"
+            "QHeaderView::section {background-color: #FFF4B5; padding: 6px; font-weight: 600; color: #333;}"
+        )
+
+        layout.addWidget(info)
+        layout.addSpacing(8)
+        layout.addWidget(self.stars_table)
         layout.addStretch()
 
     def populate_data(self):
@@ -537,10 +571,13 @@ class SettingsDialog(QtWidgets.QDialog):
         )
 
         self.team_table.setRowCount(len(employees))
+        self.stars_table.setRowCount(len(employees))
         for row, employee in enumerate(employees):
             display_name = employee.get("display_name", "")
             emp_id = employee.get("id")
-            team_value = employee_settings.get(emp_id, {}).get("team", "A")
+            settings_entry = employee_settings.get(emp_id, {})
+            team_value = settings_entry.get("team", "A")
+            stars_value = settings_entry.get("stars", 0)
 
             name_item = QtWidgets.QTableWidgetItem(display_name)
             name_item.setFlags(name_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
@@ -552,23 +589,38 @@ class SettingsDialog(QtWidgets.QDialog):
             idx = combo.findData(team_value)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
+            combo.setStyleSheet(self.combo_style())
             self.team_table.setCellWidget(row, 1, combo)
+
+            stars_name_item = QtWidgets.QTableWidgetItem(display_name)
+            stars_name_item.setFlags(stars_name_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+            self.stars_table.setItem(row, 0, stars_name_item)
+
+            stars_spin = QtWidgets.QSpinBox()
+            stars_spin.setRange(0, 100000)
+            stars_spin.setValue(stars_value)
+            stars_spin.setToolTip("Pontuação em estrelas (1 estrela = 1 ponto).")
+            stars_spin.setStyleSheet(self.spinbox_style())
+            self.stars_table.setCellWidget(row, 1, stars_spin)
 
     def set_bonus_row(self, row, min_value, max_value, bonus_value):
         min_spin = QtWidgets.QDoubleSpinBox()
         min_spin.setRange(0, 100)
         min_spin.setDecimals(2)
         min_spin.setValue(min_value)
+        min_spin.setStyleSheet(self.spinbox_style())
 
         max_spin = QtWidgets.QDoubleSpinBox()
         max_spin.setRange(0, 100)
         max_spin.setDecimals(2)
         max_spin.setValue(max_value)
+        max_spin.setStyleSheet(self.spinbox_style())
 
         bonus_spin = QtWidgets.QDoubleSpinBox()
         bonus_spin.setRange(0, 10)
         bonus_spin.setDecimals(4)
         bonus_spin.setValue(bonus_value)
+        bonus_spin.setStyleSheet(self.spinbox_style())
 
         self.bonus_table.setCellWidget(row, 0, min_spin)
         self.bonus_table.setCellWidget(row, 1, max_spin)
@@ -616,6 +668,16 @@ class SettingsDialog(QtWidgets.QDialog):
             employee_settings.setdefault(emp_id, {})
             employee_settings[emp_id]["team"] = combo.currentData()
 
+        for row in range(self.stars_table.rowCount()):
+            name_item = self.stars_table.item(row, 0)
+            spin = self.stars_table.cellWidget(row, 1)
+            if not name_item or not spin:
+                continue
+            display_name = name_item.text()
+            emp_id = display_name.split(" - ")[0].strip()
+            employee_settings.setdefault(emp_id, {})
+            employee_settings[emp_id]["stars"] = int(spin.value())
+
         self.original_config["bonus_rules"] = bonus_rules
         self.original_config["mix_rule_type"] = self.rule_type_combo.currentData()
         self.original_config["mix_rules"] = {
@@ -634,6 +696,20 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def get_config(self):
         return self.original_config
+
+    @staticmethod
+    def spinbox_style():
+        return (
+            "QSpinBox, QDoubleSpinBox {padding: 4px; border: 1px solid #FFD500; border-radius: 6px;"
+            "color: #111; background-color: #FFFFFF;}"
+        )
+
+    @staticmethod
+    def combo_style():
+        return (
+            "QComboBox {padding: 4px; border: 1px solid #FFD500; border-radius: 6px;"
+            "color: #111; background-color: #FFFFFF;}"
+        )
 
 
 class BonusCalculator(QtWidgets.QMainWindow):
@@ -880,36 +956,54 @@ class BonusCalculator(QtWidgets.QMainWindow):
         self.mix_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.mix_label.setStyleSheet("font-size: 40px; font-weight: 800; color: #ED1C24;")
 
-        self.info_grid = QtWidgets.QGridLayout()
-        self.info_grid.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.info_grid.setHorizontalSpacing(20)
-        self.info_grid.setVerticalSpacing(10)
-
         self.labels = {}
-        fields = [
-            ("Time", "time"),
-            ("Mix do time (%)", "team_mix"),
-            ("Gasolina Comum (L)", "comum"),
-            ("V-Power (L)", "vpower"),
-            ("Total de litros (L)", "total"),
-            ("Bonificação por litro", "bonus_per_liter"),
-            ("Valor estimado", "bonus_total"),
-            ("Estrelas", "stars"),
-            ("Relatório atualizado", "update_time"),
+
+        info_container = QtWidgets.QFrame()
+        info_container.setStyleSheet(
+            "QFrame {background-color: #FFFDF4; border: 1px solid #FFD500; border-radius: 12px;}"
+        )
+        info_layout = QtWidgets.QVBoxLayout(info_container)
+        info_layout.setContentsMargins(18, 16, 18, 16)
+        info_layout.setSpacing(14)
+
+        sections = [
+            ("🏁 Resumo do time", [("Time", "time"), ("Mix do time (%)", "team_mix")]),
+            ("⛽ Litros vendidos", [("Gasolina Comum (L)", "comum"), ("V-Power (L)", "vpower"), ("Total de litros (L)", "total")]),
+            ("💰 Bonificação", [("Bonificação por litro", "bonus_per_liter"), ("Valor estimado", "bonus_total")]),
+            ("⭐ Destaques", [("Estrelas", "stars"), ("Relatório atualizado", "update_time")]),
         ]
-        for row, (label, key) in enumerate(fields):
-            name_label = QtWidgets.QLabel(label + ":")
-            name_label.setStyleSheet("font-size: 14px; color: #333;")
-            value_label = QtWidgets.QLabel("-")
-            value_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #111;")
-            self.labels[key] = value_label
-            self.info_grid.addWidget(name_label, row, 0)
-            self.info_grid.addWidget(value_label, row, 1)
+
+        for title, fields in sections:
+            section_frame = QtWidgets.QFrame()
+            section_frame.setStyleSheet(
+                "QFrame {background-color: #FFFFFF; border: 1px solid #FFE17A; border-radius: 10px;}"
+            )
+            section_layout = QtWidgets.QVBoxLayout(section_frame)
+            section_layout.setContentsMargins(14, 10, 14, 10)
+            section_layout.setSpacing(6)
+
+            section_title = QtWidgets.QLabel(title)
+            section_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #ED1C24;")
+            section_layout.addWidget(section_title)
+
+            for label, key in fields:
+                row = QtWidgets.QHBoxLayout()
+                name_label = QtWidgets.QLabel(label + ":")
+                name_label.setStyleSheet("font-size: 13px; color: #444;")
+                value_label = QtWidgets.QLabel("-")
+                value_label.setStyleSheet("font-size: 15px; font-weight: 700; color: #111;")
+                row.addWidget(name_label)
+                row.addStretch()
+                row.addWidget(value_label)
+                section_layout.addLayout(row)
+                self.labels[key] = value_label
+
+            info_layout.addWidget(section_frame)
 
         layout.addWidget(self.employee_name_label)
         layout.addWidget(self.mix_label)
         layout.addSpacing(20)
-        layout.addLayout(self.info_grid)
+        layout.addWidget(info_container)
         layout.addStretch()
 
         back_button = QtWidgets.QPushButton("Voltar")
