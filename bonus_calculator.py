@@ -526,12 +526,14 @@ class SettingsDialog(QtWidgets.QDialog):
 
         info = QtWidgets.QLabel(
             "Defina a pontuação em estrelas (1 estrela = 1 ponto)."
+            "Defina manualmente o número de estrelas de cada funcionário."
         )
         info.setStyleSheet("font-size: 12px; color: #333;")
 
         self.stars_table = QtWidgets.QTableWidget()
         self.stars_table.setColumnCount(2)
         self.stars_table.setHorizontalHeaderLabels(["Funcionário", "Estrelas (pontos)"])
+        self.stars_table.setHorizontalHeaderLabels(["Funcionário", "Estrelas"])
         self.stars_table.horizontalHeader().setStretchLastSection(True)
         self.stars_table.verticalHeader().setVisible(False)
         self.stars_table.setStyleSheet(
@@ -600,6 +602,8 @@ class SettingsDialog(QtWidgets.QDialog):
             stars_spin.setRange(0, 100000)
             stars_spin.setValue(stars_value)
             stars_spin.setToolTip("Pontuação em estrelas (1 estrela = 1 ponto).")
+            stars_spin.setRange(0, 5)
+            stars_spin.setValue(stars_value)
             stars_spin.setStyleSheet(self.spinbox_style())
             self.stars_table.setCellWidget(row, 1, stars_spin)
 

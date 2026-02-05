@@ -11,6 +11,7 @@ if exist "build" rmdir /s /q "build"
 ECHO.
 
 REM Prepara ambiente virtual (Python 3.12+)
+REM Prepara ambiente virtual (Python 3.12)
 ECHO Preparando ambiente virtual...
 set "VENV_DIR=.venv"
 set "PY_CMD="
@@ -27,6 +28,11 @@ if %errorlevel%==0 (
 
 if "%PY_CMD%"=="" (
     python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor>=12) else 1)" >nul 2>&1
+py -3.12 -c "import sys; sys.exit(0)" >nul 2>&1
+if %errorlevel%==0 (
+    set "PY_CMD=py -3.12"
+) else (
+    python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor==12) else 1)" >nul 2>&1
     if %errorlevel%==0 (
         set "PY_CMD=python"
     )
@@ -35,11 +41,22 @@ if "%PY_CMD%"=="" (
 if "%PY_CMD%"=="" (
     ECHO Erro: Python 3.12 ou superior é necessário para o build.
     ECHO Instale o Python 3.12+ e tente novamente.
+    ECHO Erro: Python 3.12 é necessário para o build.
+    ECHO Instale o Python 3.12 e tente novamente.
     PAUSE
     exit /b 1
 )
 
 %PY_CMD% -m venv "%VENV_DIR%"
+if errorlevel 1 (
+    ECHO Erro ao criar o ambiente virtual.
+    PAUSE
+    exit /b 1
+)
+
+call "%VENV_DIR%\Scripts\activate"
+if errorlevel 1 (
+    ECHO Erro ao ativar o ambiente virtual.
 if errorlevel 1 (
     ECHO Erro ao criar o ambiente virtual.
     PAUSE
