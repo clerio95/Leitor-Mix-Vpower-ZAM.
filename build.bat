@@ -1,124 +1,95 @@
 @echo off
-ECHO ========================================
-ECHO    Mix V-Power - Build Script
-ECHO ========================================
-ECHO.
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM Limpa builds anteriores
-ECHO Limpando builds anteriores...
-if exist "dist" rmdir /s /q "dist"
-if exist "build" rmdir /s /q "build"
-ECHO.
+set "APP_NAME=Mix V-Power"
+set "MAIN_PY=bonus_calculator.py"
+set "ICON=icons\iconV.ico"
+set "LOGO=Logo_Vpower.png"
+set "DIST_DIR=dist"
+set "OUT_DIR=%DIST_DIR%\%APP_NAME%"
+set "LOG=build_log.txt"
 
-REM Prepara ambiente virtual (Python 3.12+)
-REM Prepara ambiente virtual (Python 3.12)
-ECHO Preparando ambiente virtual...
-set "VENV_DIR=.venv"
-set "PY_CMD="
+echo ===== INICIO %date% %time% ===== > "%LOG%"
 
-py -3.13 -c "import sys; sys.exit(0)" >nul 2>&1
-if %errorlevel%==0 (
-    set "PY_CMD=py -3.13"
+call :step "Checando Python"
+python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >>"%LOG%" 2>&1
+if errorlevel 1 (
+  echo ERRO: precisa Python 3.12+ >>"%LOG%"
+  echo ERRO: precisa Python 3.12+
+  type "%LOG%"
+  pause
+  exit /b 1
+)
+
+call :step "Limpando dist/build/spec"
+if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%" >>"%LOG%" 2>&1
+if exist "build" rmdir /s /q "build" >>"%LOG%" 2>&1
+del /q "*.spec" >>"%LOG%" 2>&1
+
+call :step "Garantindo pip e PyInstaller"
+python -m pip install --upgrade pip >>"%LOG%" 2>&1
+if errorlevel 1 goto :fail
+
+python -m pip show pyinstaller >>"%LOG%" 2>&1
+if errorlevel 1 (
+  python -m pip install pyinstaller >>"%LOG%" 2>&1
+  if errorlevel 1 goto :fail
+)
+
+call :step "Instalando requirements"
+if exist "requirements.txt" (
+  python -m pip install -r requirements.txt >>"%LOG%" 2>&1
+  if errorlevel 1 goto :fail
+)
+
+call :step "PyInstaller build (incluindo assets)"
+REM --add-data usa formato: "origem;destino" no Windows
+python -m PyInstaller --noconfirm --onefile --windowed ^
+  --name "%APP_NAME%" ^
+  --icon "%ICON%" ^
+  --add-data "%LOGO%;." ^
+  --add-data "icons;icons" ^
+  "%MAIN_PY%" >>"%LOG%" 2>&1
+if errorlevel 1 goto :fail
+
+call :step "Empacotando pasta final"
+mkdir "%OUT_DIR%" >>"%LOG%" 2>&1
+
+if exist "%DIST_DIR%\%APP_NAME%.exe" (
+  move /Y "%DIST_DIR%\%APP_NAME%.exe" "%OUT_DIR%\" >>"%LOG%" 2>&1
 ) else (
-    py -3.12 -c "import sys; sys.exit(0)" >nul 2>&1
-    if %errorlevel%==0 (
-        set "PY_CMD=py -3.12"
-    )
+  echo ERRO: executavel nao encontrado em "%DIST_DIR%". >>"%LOG%"
+  goto :fail
 )
 
-if "%PY_CMD%"=="" (
-    python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor>=12) else 1)" >nul 2>&1
-py -3.12 -c "import sys; sys.exit(0)" >nul 2>&1
-if %errorlevel%==0 (
-    set "PY_CMD=py -3.12"
-) else (
-    python -c "import sys; v=sys.version_info; sys.exit(0 if (v.major==3 and v.minor==12) else 1)" >nul 2>&1
-    if %errorlevel%==0 (
-        set "PY_CMD=python"
-    )
-)
+REM Copia arquivos extras (se existirem)
+if exist "%LOGO%" copy /Y "%LOGO%" "%OUT_DIR%\" >>"%LOG%" 2>&1
+if exist "README.md" copy /Y "README.md" "%OUT_DIR%\" >>"%LOG%" 2>&1
+if exist "Leia-me.txt" copy /Y "Leia-me.txt" "%OUT_DIR%\" >>"%LOG%" 2>&1
 
-if "%PY_CMD%"=="" (
-    ECHO Erro: Python 3.12 ou superior é necessário para o build.
-    ECHO Instale o Python 3.12+ e tente novamente.
-    ECHO Erro: Python 3.12 é necessário para o build.
-    ECHO Instale o Python 3.12 e tente novamente.
-    PAUSE
-    exit /b 1
-)
+REM Copia pasta icons sem depender de xcopy (usa PowerShell)
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "if (Test-Path 'icons') { Copy-Item -Path 'icons' -Destination '%OUT_DIR%\icons' -Recurse -Force }" >>"%LOG%" 2>&1
 
-%PY_CMD% -m venv "%VENV_DIR%"
-if errorlevel 1 (
-    ECHO Erro ao criar o ambiente virtual.
-    PAUSE
-    exit /b 1
-)
+echo ===== SUCESSO %date% %time% ===== >> "%LOG%"
+echo.
+echo Build OK!
+echo Saida: "%OUT_DIR%\%APP_NAME%.exe"
+echo Log: "%LOG%"
+pause
+exit /b 0
 
-call "%VENV_DIR%\Scripts\activate"
-if errorlevel 1 (
-    ECHO Erro ao ativar o ambiente virtual.
-if errorlevel 1 (
-    ECHO Erro ao criar o ambiente virtual.
-    PAUSE
-    exit /b 1
-)
 
-call "%VENV_DIR%\Scripts\activate"
-if errorlevel 1 (
-    ECHO Erro ao ativar o ambiente virtual.
-if errorlevel 1 (
-    ECHO Erro ao criar o ambiente virtual.
-    PAUSE
-    exit /b 1
-)
+:step
+echo.
+echo ===== %~1 =====
+echo ===== %~1 ===== >> "%LOG%"
+exit /b 0
 
-call "%VENV_DIR%\Scripts\activate"
-if errorlevel 1 (
-    ECHO Erro ao ativar o ambiente virtual.
-    PAUSE
-    exit /b 1
-)
-
-REM Instala dependências
-ECHO Instalando dependências...
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-if errorlevel 1 (
-    ECHO Erro ao instalar dependências.
-    PAUSE
-    exit /b 1
-)
-ECHO.
-
-REM Gera o executável
-ECHO Gerando executável...
-python -m PyInstaller --noconfirm --onefile --windowed --icon=icons/iconV.ico --name "Mix V-Power" bonus_calculator.py
-ECHO.
-
-REM Cria pasta de distribuição
-ECHO Criando pacote de distribuição...
-if not exist "dist\Mix V-Power" mkdir "dist\Mix V-Power"
-if exist "dist\Mix V-Power.exe" (
-    move "dist\Mix V-Power.exe" "dist\Mix V-Power\"
-) else (
-    ECHO Erro: executável não encontrado em dist.
-    PAUSE
-    exit /b 1
-)
-copy "Logo_Vpower.png" "dist\Mix V-Power\"
-xcopy "icons" "dist\Mix V-Power\icons\" /E /I /Y
-copy "README.md" "dist\Mix V-Power\"
-copy "Leia-me.txt" "dist\Mix V-Power\"
-ECHO.
-
-REM Mensagem final
-ECHO ========================================
-ECHO Build concluído com sucesso!
-ECHO.
-ECHO Arquivos gerados:
-ECHO - dist\Mix V-Power\Mix V-Power.exe
-ECHO.
-ECHO A pasta de distribuição contém tudo necessário
-ECHO para executar o programa em outro PC.
-ECHO ========================================
-PAUSE 
+:fail
+echo.
+echo ===== FALHA %date% %time% ===== >> "%LOG%"
+echo FALHA! Veja o log: "%LOG%"
+type "%LOG%"
+pause
+exit /b 1
